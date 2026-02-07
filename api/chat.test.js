@@ -3,30 +3,23 @@ import { EventEmitter } from 'node:events'
 
 let pipeSpy
 
-function createNdjsonStream(lines) {
+function createSseStream(events) {
   const encoder = new TextEncoder()
   return new ReadableStream({
     start(controller) {
-      for (const line of lines) {
-        controller.enqueue(encoder.encode(`${line}\n`))
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${event}\n\n`))
       }
       controller.close()
     },
   })
 }
 
-vi.mock('@tanstack/ai', () => {
+vi.mock('@tanstack/ai', async (importOriginal) => {
+  const actual = await importOriginal()
   return {
+    ...actual,
     convertMessagesToModelMessages: vi.fn((messages) => messages),
-    toServerSentEventsStream: vi.fn(() => {
-      // Minimal Web ReadableStream; we don't need real bytes
-      return new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('data: {}\n\n'))
-          controller.close()
-        },
-      })
-    }),
   }
 })
 
@@ -34,7 +27,26 @@ vi.mock('node:stream', () => {
   pipeSpy = vi.fn()
   return {
     Readable: {
-      fromWeb: vi.fn(() => {
+      fromWeb: vi.fn((webStream) => {
+        // Consume the web stream so the async generator runs
+        if (webStream && typeof webStream.getReader === 'function') {
+          const reader = webStream.getReader()
+          ;(async () => {
+            try {
+              while (true) {
+                const { done } = await reader.read()
+                if (done) break
+              }
+            } finally {
+              try {
+                reader.releaseLock()
+              } catch {
+                // ignore
+              }
+            }
+          })()
+        }
+
         const nodeStream = {
           pipe: pipeSpy,
           on: vi.fn(() => nodeStream),
@@ -92,19 +104,16 @@ describe('handleChat', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        body: createNdjsonStream([
+        body: createSseStream([
           JSON.stringify({
             model: 'llama3.2:latest',
-            message: { role: 'assistant', content: 'hi' },
-            done: false,
+            choices: [{ delta: { content: 'hi' } }],
           }),
           JSON.stringify({
             model: 'llama3.2:latest',
-            message: { role: 'assistant', content: '!' },
-            done: true,
-            prompt_eval_count: 1,
-            eval_count: 2,
+            choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
           }),
+          '[DONE]',
         ]),
       }
     })
@@ -154,5 +163,93 @@ describe('handleChat', () => {
 
     // Closing the SSE response should not throw
     res.emit('close')
+  })
+
+  it('executes fetch_url tool calls and continues', async () => {
+    const completionUrl = 'http://localhost:11434/v1/chat/completions'
+    const webUrl = 'https://93.184.216.34/'
+
+    let completionCall = 0
+    globalThis.fetch = vi.fn(async (url, init) => {
+      if (String(url) === completionUrl) {
+        completionCall += 1
+        if (completionCall === 1) {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            body: createSseStream([
+              JSON.stringify({
+                model: 'llama3.2:latest',
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: 'call_1',
+                          function: {
+                            name: 'fetch_url',
+                            arguments: JSON.stringify({ url: webUrl, maxChars: 600 }),
+                          },
+                        },
+                      ],
+                    },
+                    finish_reason: 'tool_calls',
+                  },
+                ],
+              }),
+              '[DONE]',
+            ]),
+          }
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          body: createSseStream([
+            JSON.stringify({
+              model: 'llama3.2:latest',
+              choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
+            }),
+            '[DONE]',
+          ]),
+        }
+      }
+
+      if (String(url) === webUrl) {
+        return {
+          status: 200,
+          headers: new Map([['content-type', 'text/html']]),
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode('<html><body><h1>Hi</h1><p>World</p></body></html>'),
+              )
+              controller.close()
+            },
+          }),
+        }
+      }
+
+      throw new Error(`Unexpected fetch url: ${url}`)
+    })
+
+    const { req, res } = createReqRes({
+      body: { messages: [{ role: 'user', content: 'fetch that url' }] },
+    })
+
+    await handleChat(req, res)
+
+    // Stream processing happens asynchronously; give it a moment to finish
+    for (let i = 0; i < 50 && completionCall < 2; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, 5))
+    }
+
+    expect(res.statusCode).toBe(200)
+    expect(completionCall).toBe(2)
+    expect(globalThis.fetch).toHaveBeenCalledWith(webUrl, expect.any(Object))
   })
 })
