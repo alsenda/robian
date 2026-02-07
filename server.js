@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import { handleChat } from './api/chat.js'
@@ -13,5 +14,7 @@ app.post('/api/chat', handleChat)
 
 app.listen(port, () => {
   console.log(`API server running at http://localhost:${port}`)
-  console.log(`Make sure OPENAI_API_KEY is set in your environment`)
+  console.log(
+    `OPENAI_API_KEY loaded: ${process.env.OPENAI_API_KEY ? 'yes' : 'no'}`,
+  )
 })

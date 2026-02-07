@@ -1,5 +1,6 @@
-import { chat } from '@tanstack/ai'
-import { openaiText } from '@tanstack/ai-openai'
+import { chat, convertMessagesToModelMessages, toServerSentEventsStream } from '@tanstack/ai'
+import { openai } from '@tanstack/ai-openai'
+import { Readable } from 'node:stream'
 
 /**
  * API endpoint for chat
@@ -9,36 +10,38 @@ import { openaiText } from '@tanstack/ai-openai'
  * app.post('/api/chat', handleChat)
  */
 export async function handleChat(req, res) {
-  const { messages } = req.body
+  const { messages } = req.body ?? {}
 
-  // Set OPENAI_API_KEY in your environment variables
-  const apiKey = process.env.OPENAI_API_KEY
-  
-  if (!apiKey) {
-    return res.status(500).json({ 
-      error: 'OPENAI_API_KEY not configured' 
-    })
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'Missing "messages" array in request body' })
+  }
+
+  // openai() auto-detects OPENAI_API_KEY from process.env
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' })
   }
 
   try {
-    const stream = await chat({
-      adapter: openaiText('gpt-4o-mini', {
-        apiKey,
-      }),
-      messages,
+    const abortController = new AbortController()
+    req.on('close', () => abortController.abort())
+
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+
+    const stream = chat({
+      adapter: openai(),
+      model,
+      messages: convertMessagesToModelMessages(messages),
+      abortController,
     })
 
-    // Set headers for SSE streaming
+    res.status(200)
     res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
     res.setHeader('Connection', 'keep-alive')
 
-    // Stream the response
-    for await (const chunk of stream) {
-      res.write(`data: ${JSON.stringify(chunk)}\n\n`)
-    }
-
-    res.end()
+    // Send SSE stream
+    const sseStream = toServerSentEventsStream(stream, abortController)
+    Readable.fromWeb(sseStream).pipe(res)
   } catch (error) {
     console.error('Chat error:', error)
     res.status(500).json({ error: error.message })
