@@ -38,7 +38,7 @@ function App() {
     [],
   )
 
-  const { messages, sendMessage, isLoading, error } = useChat({
+  const { messages, sendMessage, isLoading, error, clear, stop } = useChat({
     id: 'main-chat',
     connection,
     initialMessages,
@@ -107,6 +107,24 @@ function App() {
     scrollToBottom('smooth')
   }
 
+  const onRestart = () => {
+    try {
+      stop()
+    } catch {
+      // ignore
+    }
+
+    clear()
+
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
   const renderMessageText = (message) => {
     if (!message?.parts?.length) return ''
 
@@ -137,6 +155,9 @@ function App() {
             <a className="chat-nav-link" href="#about" onClick={(e) => e.preventDefault()}>
               ABOUT
             </a>
+            <button type="button" className="chat-action" onClick={onRestart}>
+              RESTART
+            </button>
           </nav>
         </header>
 

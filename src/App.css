@@ -23,41 +23,6 @@
 }
 
 /* Big isometric word + platform, inspired by the reference */
-.chat-panel::before {
-  content: 'DIGITAL';
-  position: absolute;
-  left: 50%;
-  top: 76px;
-  transform: translateX(-50%) skewY(-10deg) rotate(-12deg);
-  font-size: clamp(64px, 14vw, 180px);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  color: transparent;
-  -webkit-text-stroke: 2px rgba(37, 99, 235, 0.45);
-  text-shadow:
-    10px 10px 0 rgba(37, 99, 235, 0.10),
-    20px 20px 0 rgba(37, 99, 235, 0.07),
-    30px 30px 0 rgba(37, 99, 235, 0.05);
-  opacity: 0.95;
-  pointer-events: none;
-  user-select: none;
-  white-space: nowrap;
-}
-
-.chat-panel::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 188px;
-  transform: translateX(-50%) skewY(-10deg);
-  width: min(1100px, calc(100vw - 48px));
-  height: min(520px, calc(100vh - 220px));
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(26, 26, 26, 0.10);
-  pointer-events: none;
-}
 
 .chat-header {
   display: flex;
@@ -95,6 +60,22 @@
 }
 
 .chat-nav-link:hover {
+  color: #2563eb;
+}
+
+.chat-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(26, 26, 26, 0.78);
+}
+
+.chat-action:hover {
   color: #2563eb;
 }
 
