@@ -78,9 +78,20 @@ function App() {
   return (
     <div className="chat-shell">
       <div className="chat-panel" role="application" aria-label="AI chat">
-        <div className="chat-header">
-          <div className="chat-title">AI Chat</div>
-        </div>
+        <header className="chat-header">
+          <div className="chat-brand">DIGITAL CHAT</div>
+          <nav className="chat-nav" aria-label="Primary">
+            <a className="chat-nav-link" href="#home" onClick={(e) => e.preventDefault()}>
+              HOME
+            </a>
+            <a className="chat-nav-link" href="#cases" onClick={(e) => e.preventDefault()}>
+              CASES
+            </a>
+            <a className="chat-nav-link" href="#about" onClick={(e) => e.preventDefault()}>
+              ABOUT
+            </a>
+          </nav>
+        </header>
 
         <div className="chat-messages" ref={messagesViewportRef}>
           {error && (
@@ -91,7 +102,7 @@ function App() {
           )}
           {messages.length === 0 && (
             <div className="empty-state">
-              <p>Start a conversation with AI</p>
+              <p>Start a conversation.</p>
             </div>
           )}
           {messages.map((message, index) => (
