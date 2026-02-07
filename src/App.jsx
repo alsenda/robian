@@ -110,15 +110,18 @@ function App() {
               <div className="message-role">
                 {message.role === 'user' ? 'You' : 'AI'}
               </div>
-              <div className="message-content">{renderMessageText(message)}</div>
+              <div className="message-content">
+                {(() => {
+                  const text = renderMessageText(message)
+                  const isLast = index === messages.length - 1
+                  if (!text && isLoading && isLast && message.role === 'assistant') {
+                    return <span className="typing">Thinking…</span>
+                  }
+                  return text
+                })()}
+              </div>
             </div>
           ))}
-          {isLoading && (
-            <div className="message assistant">
-              <div className="message-role">AI</div>
-              <div className="message-content typing">Thinking…</div>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
 
