@@ -1,33 +1,16 @@
-/* Floating chat shell */
 .chat-shell {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 50;
-}
-
-.chat-trigger {
-  padding: 0.85rem 1.1rem;
-  border: 1px solid #333;
-  border-radius: 999px;
-  background-color: #2563eb;
-  color: white;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.chat-trigger:hover {
-  background-color: #1d4ed8;
+  inset: 0;
+  z-index: 10;
 }
 
 .chat-panel {
   display: flex;
   flex-direction: column;
-  width: min(420px, calc(100vw - 32px));
-  height: min(640px, calc(100vh - 32px));
-  border: 1px solid #333;
-  border-radius: 16px;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  border-radius: 0;
   background-color: #1a1a1a;
   overflow: hidden;
 }
@@ -49,19 +32,7 @@
   letter-spacing: 0.2px;
 }
 
-.chat-close {
-  padding: 0.45rem 0.7rem;
-  border: 1px solid #333;
-  border-radius: 999px;
-  background-color: #1a1a1a;
-  color: #e5e5e5;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
 
-.chat-close:hover {
-  background-color: #242424;
-}
 
 .chat-messages {
   flex: 1;
