@@ -16,6 +16,7 @@ function App() {
   })
 
   const [input, setInput] = useState('')
+  const inputRef = useRef(null)
 
   const messagesViewportRef = useRef(null)
   const bottomRef = useRef(null)
@@ -35,6 +36,12 @@ function App() {
 
   useEffect(() => {
     if (!isOpen) return
+    const raf = requestAnimationFrame(() => inputRef.current?.focus())
+    return () => cancelAnimationFrame(raf)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
     if (!shouldAutoScroll()) return
 
     const raf = requestAnimationFrame(() => scrollToBottom('auto'))
@@ -48,6 +55,9 @@ function App() {
     if (!content || isLoading) return
 
     setInput('')
+
+    // Keep focus in the input so you can immediately type again
+    requestAnimationFrame(() => inputRef.current?.focus())
     await sendMessage(content)
 
     if (isOpen) {
@@ -128,11 +138,11 @@ function App() {
 
           <form onSubmit={onSubmit} className="chat-input">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Message…"
-              disabled={isLoading}
             />
             <button type="submit" disabled={isLoading || !input.trim()}>
               Send
