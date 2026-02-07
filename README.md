@@ -19,9 +19,14 @@ A lightweight AI chat application built with Preact and TanStack AI.
 
 2. **Set your OpenAI API key**
    
-   Create a `.env` file in the root directory:
+   This app uses a locally running Ollama server.
+
+   Make sure Ollama is running and you have a model pulled (e.g. `llama3.2:latest`).
+
+   Optional: create a `.env` file in the root directory:
    ```
-   OPENAI_API_KEY=your_api_key_here
+   OLLAMA_URL=http://localhost:11434
+   OLLAMA_MODEL=llama3.2:latest
    ```
 
 3. **Start the development server**
@@ -43,7 +48,7 @@ A lightweight AI chat application built with Preact and TanStack AI.
 ## Architecture
 
 - **Frontend**: Preact + TanStack AI Preact hooks
-- **Backend**: Express server with TanStack AI OpenAI adapter
+- **Backend**: Express server that streams from local Ollama (`/api/chat`)
 - **Styling**: Custom CSS with modern chat UI
 - **Bundler**: Vite with esbuild
 

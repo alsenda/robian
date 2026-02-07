@@ -15,6 +15,7 @@ app.post('/api/chat', handleChat)
 app.listen(port, () => {
   console.log(`API server running at http://localhost:${port}`)
   console.log(
-    `OPENAI_API_KEY loaded: ${process.env.OPENAI_API_KEY ? 'yes' : 'no'}`,
+    `OLLAMA_URL: ${(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/+$/, '')}`,
   )
+  console.log(`OLLAMA_MODEL: ${process.env.OLLAMA_MODEL || 'llama3.2:latest'}`)
 })

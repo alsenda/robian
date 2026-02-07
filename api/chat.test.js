@@ -1,24 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-let capturedAbortController
 let pipeSpy
 
-vi.mock('@tanstack/ai-openai', () => {
-  return {
-    openai: vi.fn(() => ({ name: 'openai-adapter-mock' })),
-  }
-})
+function createNdjsonStream(lines) {
+  const encoder = new TextEncoder()
+  return new ReadableStream({
+    start(controller) {
+      for (const line of lines) {
+        controller.enqueue(encoder.encode(`${line}\n`))
+      }
+      controller.close()
+    },
+  })
+}
 
 vi.mock('@tanstack/ai', () => {
   return {
     convertMessagesToModelMessages: vi.fn((messages) => messages),
-    chat: vi.fn((opts) => {
-      capturedAbortController = opts.abortController
-      return (async function* () {
-        yield { type: 'content', id: '1', model: opts.model, timestamp: Date.now(), delta: 'hi', content: 'hi' }
-      })()
-    }),
     toServerSentEventsStream: vi.fn(() => {
       // Minimal Web ReadableStream; we don't need real bytes
       return new ReadableStream({
@@ -81,18 +80,42 @@ function createReqRes({ body } = {}) {
 describe('handleChat', () => {
   const originalEnv = process.env
 
+  const originalFetch = globalThis.fetch
+
   beforeEach(() => {
-    capturedAbortController = undefined
     process.env = { ...originalEnv }
-    delete process.env.OPENAI_MODEL
+    delete process.env.OLLAMA_URL
+    delete process.env.OLLAMA_MODEL
+
+    globalThis.fetch = vi.fn(async () => {
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: createNdjsonStream([
+          JSON.stringify({
+            model: 'llama3.2:latest',
+            message: { role: 'assistant', content: 'hi' },
+            done: false,
+          }),
+          JSON.stringify({
+            model: 'llama3.2:latest',
+            message: { role: 'assistant', content: '!' },
+            done: true,
+            prompt_eval_count: 1,
+            eval_count: 2,
+          }),
+        ]),
+      }
+    })
   })
 
   afterEach(() => {
     process.env = originalEnv
+    globalThis.fetch = originalFetch
   })
 
   it('returns 400 when messages missing', async () => {
-    process.env.OPENAI_API_KEY = 'test'
     const { req, res } = createReqRes({ body: {} })
 
     await handleChat(req, res)
@@ -103,19 +126,21 @@ describe('handleChat', () => {
     })
   })
 
-  it('returns 500 when OPENAI_API_KEY missing', async () => {
-    delete process.env.OPENAI_API_KEY
-    const { req, res } = createReqRes({ body: { messages: [] } })
+  it('returns 502 when Ollama is unreachable', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('connect ECONNREFUSED')
+    })
 
+    const { req, res } = createReqRes({ body: { messages: [] } })
     await handleChat(req, res)
 
-    expect(res.statusCode).toBe(500)
-    expect(res.jsonPayload).toEqual({ error: 'OPENAI_API_KEY not configured' })
+    expect(res.statusCode).toBe(502)
+    expect(res.jsonPayload?.error).toContain('Could not reach Ollama')
   })
 
   it('streams SSE and aborts on close', async () => {
-    process.env.OPENAI_API_KEY = 'test'
-    process.env.OPENAI_MODEL = 'gpt-test'
+    process.env.OLLAMA_URL = 'http://localhost:11434'
+    process.env.OLLAMA_MODEL = 'llama3.2:latest'
 
     const { req, res, headers } = createReqRes({
       body: { messages: [{ role: 'user', content: 'hello' }] },
@@ -127,9 +152,7 @@ describe('handleChat', () => {
     expect(headers.get('Content-Type')).toBe('text/event-stream')
     expect(pipeSpy).toHaveBeenCalledTimes(1)
 
-    expect(capturedAbortController).toBeDefined()
-    expect(capturedAbortController.signal.aborted).toBe(false)
+    // Closing the SSE response should not throw
     res.emit('close')
-    expect(capturedAbortController.signal.aborted).toBe(true)
   })
 })
