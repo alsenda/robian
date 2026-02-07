@@ -4,6 +4,35 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 function App() {
+  const STORAGE_KEY = 'theapp.chat.messages.v1'
+
+  const loadInitialMessages = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+
+      return parsed
+        .map((m) => {
+          if (!m || typeof m !== 'object') return null
+          if (m.role !== 'user' && m.role !== 'assistant') return null
+          if (!Array.isArray(m.parts)) return null
+          return {
+            id: typeof m.id === 'string' ? m.id : undefined,
+            role: m.role,
+            parts: m.parts,
+            createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+          }
+        })
+        .filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
+  const [initialMessages] = useState(loadInitialMessages)
+
   const connection = useMemo(
     () => fetchServerSentEvents('/api/chat'),
     [],
@@ -12,6 +41,7 @@ function App() {
   const { messages, sendMessage, isLoading, error } = useChat({
     id: 'main-chat',
     connection,
+    initialMessages,
   })
 
   const [input, setInput] = useState('')
@@ -37,6 +67,23 @@ function App() {
     const raf = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(raf)
   }, [])
+
+  useEffect(() => {
+    try {
+      const serializable = messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: m.parts,
+        createdAt:
+          m.createdAt instanceof Date
+            ? m.createdAt.toISOString()
+            : new Date().toISOString(),
+      }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable))
+    } catch {
+      // ignore storage errors (quota/private mode)
+    }
+  }, [messages])
 
   useEffect(() => {
     if (!shouldAutoScroll()) return
