@@ -1,5 +1,3 @@
-import { Fragment } from 'react'
-
 function renderInline(text) {
   if (!text) return ''
 
@@ -169,10 +167,10 @@ export function renderFormattedText(rawText) {
       return (
         <p key={`p-${idx}`}>
           {paragraphParts.map((part, partIndex) => (
-            <Fragment key={`ps-${idx}-${partIndex}`}>
+            <span key={`ps-${idx}-${partIndex}`}>
               {renderInline(part)}
               {partIndex < paragraphParts.length - 1 ? <br /> : null}
-            </Fragment>
+            </span>
           ))}
         </p>
       )
