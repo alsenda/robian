@@ -4,11 +4,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "node server.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "preact": "^10.19.0"
+    "@tanstack/ai": "^0.0.1-alpha.91",
+    "@tanstack/ai-client": "^0.0.1-alpha.91",
+    "@tanstack/ai-openai": "^0.0.1-alpha.91",
+    "@tanstack/ai-preact": "^0.0.1-alpha.91",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "preact": "^10.19.0",
+    "zod": "^4.0.5"
   },
   "devDependencies": {
     "vite": "^5.0.0"
