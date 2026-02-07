@@ -1,4 +1,4 @@
-import { useChat } from '@tanstack/ai-preact'
+import { useChat } from '@tanstack/ai-react'
 import { sseConnectionAdapter } from '@tanstack/ai-client'
 import './App.css'
 
