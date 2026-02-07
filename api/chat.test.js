@@ -35,9 +35,14 @@ vi.mock('node:stream', () => {
   pipeSpy = vi.fn()
   return {
     Readable: {
-      fromWeb: vi.fn(() => ({
-        pipe: pipeSpy,
-      })),
+      fromWeb: vi.fn(() => {
+        const nodeStream = {
+          pipe: pipeSpy,
+          on: vi.fn(() => nodeStream),
+          destroy: vi.fn(),
+        }
+        return nodeStream
+      }),
     },
   }
 })
@@ -50,7 +55,8 @@ function createReqRes({ body } = {}) {
   req.body = body
 
   const headers = new Map()
-  const res = {
+  const res = new EventEmitter()
+  Object.assign(res, {
     statusCode: undefined,
     status(code) {
       this.statusCode = code
@@ -60,12 +66,14 @@ function createReqRes({ body } = {}) {
       headers.set(key, value)
     },
     flushHeaders: vi.fn(),
+    write: vi.fn(),
+    end: vi.fn(),
     jsonPayload: undefined,
     json(payload) {
       this.jsonPayload = payload
       return this
     },
-  }
+  })
 
   return { req, res, headers }
 }
@@ -121,7 +129,7 @@ describe('handleChat', () => {
 
     expect(capturedAbortController).toBeDefined()
     expect(capturedAbortController.signal.aborted).toBe(false)
-    req.emit('close')
+    res.emit('close')
     expect(capturedAbortController.signal.aborted).toBe(true)
   })
 })

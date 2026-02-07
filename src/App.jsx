@@ -5,11 +5,12 @@ import './App.css'
 
 function App() {
   const connection = useMemo(
-    () => fetchServerSentEvents('http://localhost:3001/api/chat'),
+    () => fetchServerSentEvents('/api/chat'),
     [],
   )
 
   const { messages, sendMessage, isLoading, error } = useChat({
+    id: 'main-chat',
     connection,
   })
 

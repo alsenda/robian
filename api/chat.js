@@ -23,7 +23,13 @@ export async function handleChat(req, res) {
 
   try {
     const abortController = new AbortController()
-    req.on('close', () => abortController.abort())
+    // Abort when the client disconnects (SSE response closes)
+    res.on('close', () => abortController.abort())
+    req.on('aborted', () => abortController.abort())
+
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`[chat] request: messages=${messages.length}`)
+    }
 
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
@@ -42,9 +48,31 @@ export async function handleChat(req, res) {
       res.flushHeaders()
     }
 
+    // Kick the stream so intermediaries/browsers don't buffer waiting for first chunk
+    res.write(': connected\n\n')
+
     // Send SSE stream
     const sseStream = toServerSentEventsStream(stream, abortController)
-    Readable.fromWeb(sseStream).pipe(res)
+    const nodeStream = Readable.fromWeb(sseStream)
+
+    nodeStream.on('error', (error) => {
+      if (abortController.signal.aborted) return
+      console.error('SSE stream error:', error)
+      try {
+        res.end()
+      } catch {
+        // ignore
+      }
+    })
+
+    res.on('error', (error) => {
+      if (abortController.signal.aborted) return
+      console.error('Response error:', error)
+      abortController.abort()
+      nodeStream.destroy(error)
+    })
+
+    nodeStream.pipe(res)
   } catch (error) {
     console.error('Chat error:', error)
     res.status(500).json({ error: error.message })
