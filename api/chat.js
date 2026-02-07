@@ -38,6 +38,9 @@ export async function handleChat(req, res) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache, no-transform')
     res.setHeader('Connection', 'keep-alive')
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders()
+    }
 
     // Send SSE stream
     const sseStream = toServerSentEventsStream(stream, abortController)
