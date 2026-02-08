@@ -3,6 +3,52 @@ import request from "supertest";
 import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+
+import { EMBEDDING_DIM } from "../../../src/server/db/constants.ts";
+import { closeDb, getDb, initDb } from "../../../src/server/db/index.ts";
+
+vi.mock("../../../src/server/rag/embeddings/ollama.ts", () => {
+  function makeVec(hotIndex: number): number[] {
+    const v = new Array<number>(EMBEDDING_DIM).fill(0);
+    v[Math.max(0, Math.min(EMBEDDING_DIM - 1, hotIndex))] = 1;
+    return v;
+  }
+
+  return {
+    embedTexts: vi.fn(async (texts: string[]) => {
+      return texts.map((_t, i) => makeVec(i));
+    }),
+    embedQuery: vi.fn(async (text: string) => {
+      const t = String(text);
+      return makeVec(t.length % EMBEDDING_DIM);
+    }),
+  };
+});
+
+async function makeOnePagePdf(text: string): Promise<Buffer> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const page = pdfDoc.addPage();
+  page.drawText(text, { x: 50, y: 700, font, size: 18 });
+  const bytes = await pdfDoc.save();
+  return Buffer.from(bytes);
+}
+
+async function waitForJobDone(app: any, jobId: string, timeoutMs = 8000): Promise<any> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const res = await request(app).get(`/api/rag/ingest/jobs/${encodeURIComponent(jobId)}`);
+    if (res.status === 200) {
+      const state = String(res.body?.state || "");
+      if (state === "done" || state === "failed") {
+        return res.body;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`Timed out waiting for ingest job ${jobId}`);
+}
 
 async function makeTempDir(): Promise<string> {
   const base = await fsp.mkdtemp(path.join(os.tmpdir(), "theapp-uploads-"));
@@ -21,6 +67,7 @@ async function rmDirSafe(dir: string | undefined): Promise<void> {
 describe("uploads HTTP API (TS)", () => {
   const originalEnv = process.env;
   let uploadsDir: string | undefined;
+  let ragDbDir: string | undefined;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -30,11 +77,26 @@ describe("uploads HTTP API (TS)", () => {
     process.env.UPLOADS_DIR = uploadsDir;
     delete process.env.UPLOAD_ALLOWED_EXTS;
     delete process.env.UPLOAD_MAX_BYTES;
+
+    // Ensure the src/server RAG DB used by ingestion has an isolated path per test.
+    ragDbDir = await fsp.mkdtemp(path.join(os.tmpdir(), "theapp-ragdb-"));
+    process.env.RAG_DB_PATH = path.join(ragDbDir, "rag.sqlite");
+    closeDb();
+    initDb({ dbPath: process.env.RAG_DB_PATH });
+
+    // Default behavior per spec: enabled in non-prod (test env). Tests may override.
+    delete process.env.AUTO_INGEST_PDF_ON_UPLOAD;
   });
 
   afterEach(async () => {
     process.env = originalEnv;
     await rmDirSafe(uploadsDir);
+    await rmDirSafe(ragDbDir);
+    try {
+      closeDb();
+    } catch {
+      // ignore
+    }
     vi.unmock("../../rag/index.ts");
   });
 
@@ -298,5 +360,61 @@ describe("uploads HTTP API (TS)", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(deleteDocuments).toHaveBeenCalledTimes(1);
     expect(deleteDocuments).toHaveBeenCalledWith([id]);
+  });
+
+  it("auto-enqueues PDF ingest on upload when enabled, and indexes asynchronously", async () => {
+    const { createApp } = await import("../../app.ts");
+    const app = createApp();
+
+    const pdfBuffer = await makeOnePagePdf("Hello PDF");
+
+    const uploadRes = await request(app)
+      .post("/api/uploads")
+      .attach("file", pdfBuffer, {
+        filename: "doc.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(uploadRes.status).toBe(200);
+    expect(uploadRes.body.ok).toBe(true);
+    expect(String(uploadRes.body.upload?.id || "")).toBeTruthy();
+
+    expect(uploadRes.body.rag?.status).toBe("queued");
+    const jobId = String(uploadRes.body.rag?.jobId || "");
+    expect(jobId).toBeTruthy();
+
+    const status = await waitForJobDone(app, jobId, 12_000);
+    expect(String(status.state)).toBe("done");
+    expect(Number(status.result?.chunksInserted || 0)).toBeGreaterThan(0);
+
+    const uploadId = String(uploadRes.body.upload?.id || "");
+    const db = getDb();
+    const docRow = db.prepare("SELECT status FROM documents WHERE id = ?").get(uploadId) as any;
+    expect(String(docRow?.status || "")).toBe("indexed");
+
+    const chunkRow = db
+      .prepare("SELECT content FROM chunks WHERE documentId = ? ORDER BY chunkIndex LIMIT 50")
+      .all(uploadId) as any[];
+    expect(chunkRow.length).toBeGreaterThan(0);
+    expect(chunkRow.some((r) => String(r?.content || "").includes("Hello PDF"))).toBe(true);
+  });
+
+  it("does not auto-queue PDFs when AUTO_INGEST_PDF_ON_UPLOAD=false", async () => {
+    process.env.AUTO_INGEST_PDF_ON_UPLOAD = "false";
+    const { createApp } = await import("../../app.ts");
+    const app = createApp();
+
+    const pdfBuffer = await makeOnePagePdf("Hello PDF");
+
+    const uploadRes = await request(app)
+      .post("/api/uploads")
+      .attach("file", pdfBuffer, {
+        filename: "doc.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(uploadRes.status).toBe(200);
+    expect(uploadRes.body.ok).toBe(true);
+    expect(uploadRes.body.rag?.status).toBe("not_queued");
   });
 });

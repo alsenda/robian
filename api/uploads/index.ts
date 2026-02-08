@@ -6,6 +6,7 @@ import { validateUploadOrThrow, sanitizeFilename, getMaxBytes } from "./security
 import { detectType } from "./parsing/detectType.ts";
 import { extractPreviewText } from "./parsing/textExtract.stub.ts";
 import { writeStoredFile, deleteStoredFile, createDownloadStream } from "./storage/localStorage.ts";
+import { enqueueUploadIngestJob } from "../rag/enqueueUploadIngest.ts";
 import {
   addManifestEntry,
   deleteManifestEntry,
@@ -20,6 +21,48 @@ export interface CreateUploadsRouterDeps {
 }
 
 const RAG_TEXT_MIME_TYPES = new Set(["text/plain", "text/markdown", "application/json", "text/csv"]);
+
+function parseBoolEnv(name: string): boolean | null {
+  const raw = process.env[name];
+  if (raw == null) { return null; }
+  const v = String(raw).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(v)) { return true; }
+  if (["0", "false", "no", "n", "off"].includes(v)) { return false; }
+  return null;
+}
+
+function shouldAutoIngestPdfOnUpload(): boolean {
+  const explicit = parseBoolEnv("AUTO_INGEST_PDF_ON_UPLOAD");
+  if (explicit !== null) { return explicit; }
+
+  // Default: enabled in non-prod (dev/test), disabled in prod unless explicitly enabled.
+  return process.env.NODE_ENV !== "production";
+}
+
+function hasPdfMagicBytes(buffer: unknown): boolean {
+  try {
+    const b = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as any);
+    return b.length >= 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46; // "%PDF"
+  } catch {
+    return false;
+  }
+}
+
+function isPdfUpload(args: {
+  originalName: string;
+  mimeTypeSeen?: string;
+  detectedMimeType?: string;
+  buffer: unknown;
+}): boolean {
+  const name = String(args.originalName || "");
+  const seen = String(args.mimeTypeSeen || "").toLowerCase().trim();
+  const detected = String(args.detectedMimeType || "").toLowerCase().trim();
+
+  if (seen === "application/pdf" || detected === "application/pdf") { return true; }
+  if (/\.pdf$/i.test(name)) { return true; }
+  if (hasPdfMagicBytes(args.buffer)) { return true; }
+  return false;
+}
 
 function isDebugRagPdfEnabled(): boolean {
   const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
@@ -170,6 +213,43 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
 
       await addManifestEntry(entry);
 
+      // Auto-ingest PDFs on upload (async, best-effort).
+      // This schedules the existing ingest queue worker (same as POST /api/rag/ingest/:documentId)
+      // so PDFs become searchable without a separate client call.
+      const autoIngestEnabled = shouldAutoIngestPdfOnUpload();
+      const looksPdf = isPdfUpload({
+        originalName: file.originalname,
+        mimeTypeSeen: file.mimetype,
+        detectedMimeType: typeInfo.mimeType,
+        buffer: file.buffer,
+      });
+
+      let ragInfo: { status: "queued"; jobId: string } | { status: "not_queued"; reason: string } | undefined;
+
+      if (looksPdf) {
+        if (!autoIngestEnabled) {
+          ragInfo = { status: "not_queued", reason: "AUTO_INGEST_PDF_ON_UPLOAD disabled" };
+          debugRagPdf("auto_ingest_skipped", { id, reason: ragInfo.reason });
+        } else {
+          try {
+            const userId = String((req.body as any)?.userId || "local").trim() || "local";
+            const jobId = enqueueUploadIngestJob({
+              userId,
+              documentId: id,
+              filename: entry.originalName || entry.storedName,
+              mimeType: entry.mimeType,
+              filePath: stored.path,
+            });
+            ragInfo = { status: "queued", jobId };
+            debugRagPdf("auto_ingest_enqueued", { id, jobId, userId, filePath: stored.path });
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error ?? "unknown error");
+            ragInfo = { status: "not_queued", reason: message };
+            debugRagPdf("auto_ingest_failed", { id, reason: message });
+          }
+        }
+      }
+
       // DIAGNOSIS (2026-02): PDF uploads are persisted (manifest + stored file) but are NOT
       // extracted/indexed from this endpoint. Only small text-like uploads are best-effort
       // upserted here. PDFs require an explicit ingestion trigger via POST /api/rag/ingest/:documentId
@@ -209,7 +289,11 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
         });
       }
 
-      return res.status(200).json({ ok: true, upload: entry });
+      return res.status(200).json({
+        ok: true,
+        upload: entry,
+        ...(ragInfo ? { rag: ragInfo } : {}),
+      });
     } catch (error: unknown) {
       const err = error as { code?: string; message?: string } | null;
       // Multer file size errors

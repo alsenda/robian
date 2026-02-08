@@ -4,7 +4,8 @@ import path from "node:path";
 import { getManifestEntry } from "../uploads/db/manifest.ts";
 import { getUploadsRootDir, safeJoin } from "../uploads/storage/paths.ts";
 
-import { enqueueIngest, getIngestJobStatus } from "../../src/server/rag/ingest/queue.ts";
+import { getIngestJobStatus } from "../../src/server/rag/ingest/queue.ts";
+import { enqueueUploadIngestFromManifest } from "./enqueueUploadIngest.ts";
 
 function isDebugRagPdfEnabled(): boolean {
   const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
@@ -57,22 +58,19 @@ export function createRagIngestRouter(): express.Router {
       return res.status(400).json({ ok: false, error: { message: "Upload is missing stored extension" } });
     }
 
-    const jobId = enqueueIngest({
-      userId,
-      documentId,
-      filename: entry.originalName || entry.storedName,
-      mimeType: entry.mimeType,
-      filePath,
-    });
+    const enq = await enqueueUploadIngestFromManifest({ userId, documentId });
+    if (!enq.ok) {
+      return res.status(400).json({ ok: false, error: { message: enq.reason } });
+    }
 
     debugRagPdf("ingest_enqueued", {
-      jobId,
+      jobId: enq.jobId,
       documentId,
       mimeType: entry.mimeType,
       filePath,
     });
 
-    return res.status(200).json({ jobId });
+    return res.status(200).json({ jobId: enq.jobId });
   });
 
   // GET /api/rag/ingest/jobs/:jobId
