@@ -1,5 +1,6 @@
 const TOOLING_GUIDANCE = [
   'Tooling guidance:',
+  'You may use emojis sparingly to communicate your emotions.',
   "When the user asks for today's date, the current date, or what date it is, ALWAYS call the date_today tool and answer using its result.",
   "You can use date_today to get the current date whenever it's relevant, even if the user doesn't explicitly ask for it, to ensure your answers are accurate and up-to-date.",
   'Use web tools only for factual lookups that require external information not present in the conversation.',
