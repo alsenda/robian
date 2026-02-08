@@ -26,7 +26,7 @@ function parseTopK(value: unknown): { ok: true; topK: number } | { ok: false; me
   if (value === undefined || value === null) { return { ok: true, topK: 8 }; }
 
   const raw = typeof value === "string" ? value.trim() : value;
-  if (raw === "") { return { ok: true, topK: 8 }; }
+  if (raw === "" || String(raw).trim().toLowerCase() === "null") { return { ok: true, topK: 8 }; }
 
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n)) { return { ok: false, message: "topK must be a number" }; }
@@ -36,13 +36,29 @@ function parseTopK(value: unknown): { ok: true; topK: number } | { ok: false; me
   return { ok: true, topK: i };
 }
 
-function normalizeSourceId(value: unknown): { ok: true; sourceId?: string } | { ok: false; message: string } {
-  if (value === undefined || value === null) { return { ok: true }; }
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (value === undefined || value === null) { return undefined; }
   const s = String(value).trim();
+  if (!s) { return undefined; }
+  if (s.toLowerCase() === "null") { return undefined; }
+  return s;
+}
+
+function normalizeSourceId(value: unknown): { ok: true; sourceId?: string } | { ok: false; message: string } {
+  const s = normalizeOptionalString(value);
   if (!s) { return { ok: true }; }
   const uuidOk = z.string().uuid().safeParse(s).success;
   if (!uuidOk) { return { ok: false, message: "sourceId must be a UUID" }; }
   return { ok: true, sourceId: s };
+}
+
+function normalizeTopKValue(value: unknown): unknown {
+  if (value === undefined || value === null) { return undefined; }
+  if (typeof value === "number") { return value; }
+  const s = normalizeOptionalString(value);
+  if (s === undefined) { return undefined; }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : s;
 }
 
 export const ragSearchUploadsDef = {
@@ -69,7 +85,21 @@ export function createRagSearchUploadsTool({ rag }: { rag: RagService }): RagSea
   return {
     ...ragSearchUploadsDef,
     async execute(input: unknown): Promise<RagQueryResult> {
-      const parsed = ragSearchUploadsDef.inputSchema.safeParse(input);
+      // Normalize serialization quirks BEFORE validation (e.g. sourceId: "null", topK: "50").
+      const rawObj = input && typeof input === "object" ? (input as Record<string, unknown>) : null;
+      const normalizedInput = rawObj
+        ? {
+            ...rawObj,
+            ...(Object.prototype.hasOwnProperty.call(rawObj, "sourceId")
+              ? { sourceId: normalizeOptionalString(rawObj.sourceId) ?? null }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(rawObj, "topK")
+              ? { topK: normalizeTopKValue(rawObj.topK) }
+              : {}),
+          }
+        : input;
+
+      const parsed = ragSearchUploadsDef.inputSchema.safeParse(normalizedInput);
       if (!parsed.success) {
         const details = zodIssuesToDetails(parsed.error.issues as any);
         return invalidInput(details, "");

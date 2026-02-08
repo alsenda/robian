@@ -133,6 +133,19 @@ describe("uploads tools (TS)", () => {
     expect(rag.query).toHaveBeenCalledWith("q", 1, { source: "upload" });
   });
 
+  it("rag_search_uploads accepts topK as numeric string \"50\"", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: "q", topK: "50" })) as RagQueryResult;
+    expect(out.ok).toBe(true);
+    expect(rag.query).toHaveBeenCalledWith("q", 50, { source: "upload" });
+  });
+
   it("rag_search_uploads rejects empty query with details", async () => {
     const rag = {
       upsertDocuments: async () => ({ ok: true, upserted: 0 }),
@@ -160,6 +173,34 @@ describe("uploads tools (TS)", () => {
     const out = (await tool.execute({ query: "q", sourceId: null })) as RagQueryResult;
     expect(out.ok).toBe(true);
     expect(rag.query).toHaveBeenCalledWith("q", 8, { source: "upload" });
+  });
+
+  it("rag_search_uploads treats sourceId string \"null\" as undefined", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: "q", sourceId: "null" })) as RagQueryResult;
+    expect(out.ok).toBe(true);
+    expect(rag.query).toHaveBeenCalledWith("q", 8, { source: "upload" });
+  });
+
+  it("rag_search_uploads rejects non-UUID sourceId strings", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: "q", sourceId: "abc" })) as RagQueryResult;
+    expect(out.ok).toBe(false);
+    expect(out.error?.kind).toBe("invalid_input");
+    expect(String(out.error?.message || "")).toMatch(/UUID/i);
+    expect(rag.query).not.toHaveBeenCalled();
   });
 
   it("rag_search_uploads returns ok:false when rag.query throws", async () => {
