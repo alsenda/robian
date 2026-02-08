@@ -29,16 +29,19 @@
     width: 14px;
     height: 14px;
     background: transparent;
+    border-radius: 0 !important;
   }
 
   .brutal-scroll::-webkit-scrollbar-track {
     background: transparent;
-    border-radius: 0;
+    border-radius: 0 !important;
   }
 
   .brutal-scroll::-webkit-scrollbar-thumb {
     background: var(--color-black);
-    border-radius: 0;
+    border-radius: 0 !important;
+    border: 0;
+    background-clip: border-box;
     box-shadow: 6px 6px 0 0 var(--color-black);
   }
 
