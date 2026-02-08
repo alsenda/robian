@@ -3,16 +3,24 @@ import { EventEmitter } from 'node:events'
 
 let pipeSpy
 
-function createSseStream(events) {
+function createSseStream(dataEvents) {
   const encoder = new TextEncoder()
   return new ReadableStream({
     start(controller) {
-      for (const event of events) {
+      for (const event of dataEvents) {
         controller.enqueue(encoder.encode(`data: ${event}\n\n`))
       }
       controller.close()
     },
   })
+}
+
+async function waitFor(conditionFn, { maxAttempts = 50, delayMs = 5 } = {}) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (conditionFn()) return
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
 }
 
 vi.mock('@tanstack/ai', async (importOriginal) => {
@@ -28,7 +36,7 @@ vi.mock('node:stream', () => {
   return {
     Readable: {
       fromWeb: vi.fn((webStream) => {
-        // Consume the web stream so the async generator runs
+        // Consume the web stream so the async generator runs.
         if (webStream && typeof webStream.getReader === 'function') {
           const reader = webStream.getReader()
           ;(async () => {
@@ -58,8 +66,7 @@ vi.mock('node:stream', () => {
   }
 })
 
-// Import after mocks
-const { handleChat } = await import('./chat.js')
+const { handleChat } = await import('../../chat/index.js')
 
 function createReqRes({ body } = {}) {
   const req = new EventEmitter()
@@ -89,15 +96,18 @@ function createReqRes({ body } = {}) {
   return { req, res, headers }
 }
 
-describe('handleChat', () => {
+describe('search_web tool integration', () => {
   const originalEnv = process.env
-
   const originalFetch = globalThis.fetch
+
+  const defaultCompletionUrl = 'http://localhost:11434/v1/chat/completions'
+  const defaultModel = 'llama3.2:latest'
 
   beforeEach(() => {
     process.env = { ...originalEnv }
     delete process.env.OLLAMA_URL
     delete process.env.OLLAMA_MODEL
+    process.env.BRAVE_SEARCH_API_KEY = 'test_key'
 
     globalThis.fetch = vi.fn(async () => {
       return {
@@ -106,11 +116,11 @@ describe('handleChat', () => {
         statusText: 'OK',
         body: createSseStream([
           JSON.stringify({
-            model: 'llama3.2:latest',
+            model: defaultModel,
             choices: [{ delta: { content: 'hi' } }],
           }),
           JSON.stringify({
-            model: 'llama3.2:latest',
+            model: defaultModel,
             choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
           }),
           '[DONE]',
@@ -124,55 +134,26 @@ describe('handleChat', () => {
     globalThis.fetch = originalFetch
   })
 
-  it('returns 400 when messages missing', async () => {
-    const { req, res } = createReqRes({ body: {} })
+  it('executes search_web tool calls and continues', async () => {
+    const completionUrl = defaultCompletionUrl
 
-    await handleChat(req, res)
-
-    expect(res.statusCode).toBe(400)
-    expect(res.jsonPayload).toEqual({
-      error: 'Missing "messages" array in request body',
-    })
-  })
-
-  it('returns 502 when Ollama is unreachable', async () => {
-    globalThis.fetch = vi.fn(async () => {
-      throw new Error('connect ECONNREFUSED')
-    })
-
-    const { req, res } = createReqRes({ body: { messages: [] } })
-    await handleChat(req, res)
-
-    expect(res.statusCode).toBe(502)
-    expect(res.jsonPayload?.error).toContain('Could not reach Ollama')
-  })
-
-  it('streams SSE and aborts on close', async () => {
-    process.env.OLLAMA_URL = 'http://localhost:11434'
-    process.env.OLLAMA_MODEL = 'llama3.2:latest'
-
-    const { req, res, headers } = createReqRes({
-      body: { messages: [{ role: 'user', content: 'hello' }] },
-    })
-
-    await handleChat(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(headers.get('Content-Type')).toBe('text/event-stream')
-    expect(pipeSpy).toHaveBeenCalledTimes(1)
-
-    // Closing the SSE response should not throw
-    res.emit('close')
-  })
-
-  it('executes fetch_url tool calls and continues', async () => {
-    const completionUrl = 'http://localhost:11434/v1/chat/completions'
-    const webUrl = 'https://93.184.216.34/'
-
+    const completionBodies = []
     let completionCall = 0
+
     globalThis.fetch = vi.fn(async (url, init) => {
-      if (String(url) === completionUrl) {
+      const urlText = String(url)
+
+      if (urlText === completionUrl) {
         completionCall += 1
+
+        if (init?.body) {
+          try {
+            completionBodies.push(JSON.parse(String(init.body)))
+          } catch {
+            // ignore
+          }
+        }
+
         if (completionCall === 1) {
           return {
             ok: true,
@@ -180,7 +161,7 @@ describe('handleChat', () => {
             statusText: 'OK',
             body: createSseStream([
               JSON.stringify({
-                model: 'llama3.2:latest',
+                model: defaultModel,
                 choices: [
                   {
                     delta: {
@@ -189,8 +170,8 @@ describe('handleChat', () => {
                           index: 0,
                           id: 'call_1',
                           function: {
-                            name: 'fetch_url',
-                            arguments: JSON.stringify({ url: webUrl, maxChars: 600 }),
+                            name: 'search_web',
+                            arguments: JSON.stringify({ query: 'hello', count: 3 }),
                           },
                         },
                       ],
@@ -210,7 +191,7 @@ describe('handleChat', () => {
           statusText: 'OK',
           body: createSseStream([
             JSON.stringify({
-              model: 'llama3.2:latest',
+              model: defaultModel,
               choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
             }),
             '[DONE]',
@@ -218,16 +199,24 @@ describe('handleChat', () => {
         }
       }
 
-      if (String(url) === webUrl) {
+      if (urlText.startsWith('https://api.search.brave.com/res/v1/web/search')) {
         return {
+          ok: true,
           status: 200,
-          headers: new Map([['content-type', 'text/html']]),
-          body: new ReadableStream({
-            start(controller) {
-              controller.enqueue(
-                new TextEncoder().encode('<html><body><h1>Hi</h1><p>World</p></body></html>'),
-              )
-              controller.close()
+          json: async () => ({
+            web: {
+              results: [
+                {
+                  title: 'Example',
+                  url: 'https://example.com/page#frag',
+                  description: 'Snippet',
+                },
+                {
+                  title: 'PDF',
+                  url: 'https://example.com/file.pdf',
+                  description: 'Should be filtered',
+                },
+              ],
             },
           }),
         }
@@ -237,19 +226,20 @@ describe('handleChat', () => {
     })
 
     const { req, res } = createReqRes({
-      body: { messages: [{ role: 'user', content: 'fetch that url' }] },
+      body: { messages: [{ role: 'user', content: 'search the web' }] },
     })
 
     await handleChat(req, res)
 
-    // Stream processing happens asynchronously; give it a moment to finish
-    for (let i = 0; i < 50 && completionCall < 2; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 5))
-    }
+    await waitFor(() => completionCall >= 2)
 
     expect(res.statusCode).toBe(200)
     expect(completionCall).toBe(2)
-    expect(globalThis.fetch).toHaveBeenCalledWith(webUrl, expect.any(Object))
+
+    const second = completionBodies.at(1)
+    const toolMsg = second?.messages?.find?.((m) => m?.role === 'tool')
+    expect(typeof toolMsg?.content).toBe('string')
+    expect(toolMsg.content).toContain('"query":"hello"')
+    expect(toolMsg.content).toContain('https://example.com/page')
   })
 })
