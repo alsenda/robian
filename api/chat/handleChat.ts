@@ -31,7 +31,7 @@ function stripTrailingSlashes(text: string): string {
 }
 
 export function createHandleChat({ ragService }: { ragService: RagService }) {
-  const serverTools = createServerTools({ ragService })
+  const serverTools = createServerTools({ rag: ragService })
 
   return async function handleChat(req: Request, res: ExpressResponse): Promise<void> {
     const { messages } = (req.body as { messages?: unknown } | undefined) ?? {}

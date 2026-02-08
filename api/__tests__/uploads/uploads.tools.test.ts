@@ -5,6 +5,7 @@ import fsp from 'node:fs/promises'
 
 import { createStubRagService } from '../../rag/ragService.stub.ts'
 import { createRagSearchUploadsTool } from '../../uploads/tools/ragSearchUploads.tool.ts'
+import type { RagQueryResult } from '../../rag/types.ts'
 
 async function makeTempDir(): Promise<string> {
   const base = await fsp.mkdtemp(path.join(os.tmpdir(), 'theapp-uploads-tools-'))
@@ -82,8 +83,8 @@ describe('uploads tools (TS)', () => {
 
   it('rag_search_uploads returns not_implemented error with empty results', async () => {
     const rag = createStubRagService()
-    const tool = createRagSearchUploadsTool(rag)
-    const out = (await tool.execute({ query: 'anything', topK: 3 })) as any
+    const tool = createRagSearchUploadsTool({ rag })
+    const out: RagQueryResult = await tool.execute({ query: 'anything', topK: 3 })
     expect(out.ok).toBe(false)
     expect(out.results).toEqual([])
     expect(out.error?.kind).toBe('not_implemented')

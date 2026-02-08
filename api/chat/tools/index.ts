@@ -25,14 +25,14 @@ export type ServerTool = {
   execute: (input: unknown) => Promise<unknown>
 }
 
-export function createServerTools({ ragService }: { ragService: RagService }): ServerTool[] {
+export function createServerTools({ rag }: { rag: RagService }): ServerTool[] {
   return [
     fetchUrlTool as unknown as ServerTool,
     searchWebTool as unknown as ServerTool,
     dateTodayTool as unknown as ServerTool,
     listUploadsTool as unknown as ServerTool,
     getUploadTool as unknown as ServerTool,
-    createRagSearchUploadsTool(ragService) as unknown as ServerTool,
+    createRagSearchUploadsTool({ rag }) as unknown as ServerTool,
   ]
 }
 
