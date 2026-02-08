@@ -228,7 +228,7 @@ describe('handleChat autonomous RAG (behavioral)', () => {
     expect(rag.query).toHaveBeenCalledWith('payment terms', 5, { source: 'upload', sourceId: 'u1' })
 
     const events = parseCapturedChunks()
-    const firstToolCallIndex = events.findIndex((e) => e?.type === 'tool-call')
+    const firstToolCallIndex = events.findIndex((e) => e?.type === 'tool_call')
     const firstContentIndex = events.findIndex((e) => e?.type === 'content')
     expect(firstToolCallIndex).toBeGreaterThanOrEqual(0)
     expect(firstContentIndex).toBeGreaterThanOrEqual(0)

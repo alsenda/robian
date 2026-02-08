@@ -139,7 +139,14 @@ export async function* streamChatWithTools({
       const tool = serverTools.find((t) => t.name === toolCall.name)
       if (!tool) {
         const errorText = `Unknown tool: ${toolCall.name}`
-        yield { type: 'tool-result', toolCallId: toolCall.id, content: errorText }
+        yield {
+          type: 'tool_result',
+          id: requestId,
+          model,
+          timestamp: Date.now(),
+          toolCallId: toolCall.id,
+          content: errorText,
+        }
         conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: errorText })
         continue
       }
@@ -150,7 +157,14 @@ export async function* streamChatWithTools({
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'parse error'
         const errorText = `Invalid tool arguments: ${message}`
-        yield { type: 'tool-result', toolCallId: toolCall.id, content: errorText }
+        yield {
+          type: 'tool_result',
+          id: requestId,
+          model,
+          timestamp: Date.now(),
+          toolCallId: toolCall.id,
+          content: errorText,
+        }
         conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: errorText })
         continue
       }
@@ -158,11 +172,25 @@ export async function* streamChatWithTools({
       try {
         const output = await tool.execute(parsedArgs)
         const content = typeof output === 'string' ? output : JSON.stringify(output)
-        yield { type: 'tool-result', toolCallId: toolCall.id, content }
+        yield {
+          type: 'tool_result',
+          id: requestId,
+          model,
+          timestamp: Date.now(),
+          toolCallId: toolCall.id,
+          content,
+        }
         conversation.push({ role: 'tool', tool_call_id: toolCall.id, content })
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Tool execution failed'
-        yield { type: 'tool-result', toolCallId: toolCall.id, content: message }
+        yield {
+          type: 'tool_result',
+          id: requestId,
+          model,
+          timestamp: Date.now(),
+          toolCallId: toolCall.id,
+          content: message,
+        }
         conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: message })
       }
     }

@@ -129,10 +129,14 @@ export function createChatCompletionsStreamParser({
 
               if (existing.name) {
                 yield {
-                  type: 'tool-call',
+                  type: 'tool_call',
+                  id: requestId,
+                  model: state.resolvedModel,
+                  timestamp: Date.now(),
                   index,
                   toolCall: {
                     id: existing.id,
+                    type: 'function',
                     function: {
                       name: existing.name,
                       arguments: argsDelta,
@@ -173,10 +177,14 @@ export function createChatCompletionsStreamParser({
 
             if (existing.name) {
               yield {
-                type: 'tool-call',
+                type: 'tool_call',
+                id: requestId,
+                model: state.resolvedModel,
+                timestamp: Date.now(),
                 index,
                 toolCall: {
                   id: existing.id,
+                  type: 'function',
                   function: {
                     name: existing.name,
                     arguments: argsDelta,

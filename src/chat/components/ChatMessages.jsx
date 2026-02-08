@@ -1,5 +1,6 @@
 import { renderFormattedText } from '../formatting.jsx'
 import { renderMessageText } from '../messageText.js'
+import { ToolBadges } from './ToolBadges.jsx'
 
 export function ChatMessages({ messages, isLoading, error, messagesViewportRef, bottomRef }) {
   return (
@@ -50,6 +51,8 @@ export function ChatMessages({ messages, isLoading, error, messagesViewportRef, 
               return renderFormattedText(text)
             })()}
           </div>
+
+          {message.role === 'assistant' ? <ToolBadges messages={messages} index={index} /> : null}
         </div>
       ))}
       <div ref={bottomRef} />
