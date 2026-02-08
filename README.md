@@ -21,12 +21,12 @@ A lightweight AI chat application built with Preact and TanStack AI.
    
    This app uses a locally running Ollama server.
 
-   Make sure Ollama is running and you have a model pulled (e.g. `llama3.2:latest`).
+   Make sure Ollama is running and you have a model pulled (e.g. `robian:latest`).
 
    Optional: create a `.env` file in the root directory:
    ```
    OLLAMA_URL=http://localhost:11434
-   OLLAMA_MODEL=llama3.2:latest
+   OLLAMA_MODEL=robian:latest
    ```
 
 3. **Start the development server**

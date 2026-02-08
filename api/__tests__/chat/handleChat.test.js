@@ -92,7 +92,7 @@ describe('handleChat', () => {
   const originalEnv = process.env
   const originalFetch = globalThis.fetch
 
-  const defaultModel = 'llama3.2:latest'
+  const defaultModel = 'robian:latest'
 
   beforeEach(() => {
     process.env = { ...originalEnv }

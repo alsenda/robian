@@ -101,7 +101,7 @@ describe('date_today tool integration', () => {
   const originalFetch = globalThis.fetch
 
   const defaultCompletionUrl = 'http://localhost:11434/v1/chat/completions'
-  const defaultModel = 'llama3.2:latest'
+  const defaultModel = 'robian:latest'
 
   beforeEach(() => {
     process.env = { ...originalEnv }

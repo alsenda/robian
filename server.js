@@ -32,5 +32,5 @@ app.listen(port, () => {
   console.log(
     `OLLAMA_URL: ${(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/+$/, '')}`,
   )
-  console.log(`OLLAMA_MODEL: ${process.env.OLLAMA_MODEL || 'llama3.2:latest'}`)
+  console.log(`OLLAMA_MODEL: ${process.env.OLLAMA_MODEL || 'robian:latest'}`)
 })

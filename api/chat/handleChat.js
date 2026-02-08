@@ -12,7 +12,7 @@ import { streamOllamaOpenAiOnce } from './ollama/client.js'
 import { streamChatWithTools } from './streamChat.js'
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
-const DEFAULT_OLLAMA_MODEL = 'llama3.2:latest'
+const DEFAULT_OLLAMA_MODEL = 'robian:latest'
 
 function stripTrailingSlashes(text) {
   return String(text || '').replace(/\/+$/, '')
