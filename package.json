@@ -19,6 +19,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "multer": "^2.0.0",
+    "pdfjs-dist": "^5.4.624",
     "preact": "^10.19.0",
     "sqlite-vec": "^0.1.7-alpha.2",
     "zod": "^4.0.5"
@@ -31,6 +32,7 @@
     "@types/node": "^22.13.1",
     "@types/supertest": "^6.0.3",
     "autoprefixer": "^10.4.24",
+    "pdf-lib": "^1.17.1",
     "postcss": "^8.5.6",
     "supertest": "^7.1.1",
     "tailwindcss": "^4.1.18",
