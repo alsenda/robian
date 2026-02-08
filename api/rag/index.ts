@@ -1,18 +1,16 @@
-import type { RagService } from './types.js'
-import { createStubRagService } from './ragService.stub.js'
+import type { RagService } from './types.ts'
+import { createStubRagService } from './ragService.stub.ts'
 
-export interface CreateRagServiceConfig {
-  implementation?: 'stub'
+export interface RagServiceConfig {
+  provider?: 'stub'
 }
 
-export function createRagService(config: CreateRagServiceConfig = {}): RagService {
-  const impl = config.implementation ?? (process.env.RAG_IMPLEMENTATION as string | undefined) ?? 'stub'
+export function createRagService(config?: RagServiceConfig): RagService {
+  const provider = process.env.RAG_PROVIDER ?? config?.provider ?? 'stub'
 
-  switch (impl) {
+  switch (provider) {
     case 'stub':
     default:
       return createStubRagService()
   }
 }
-
-export type * from './types.js'

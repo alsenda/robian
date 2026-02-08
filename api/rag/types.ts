@@ -1,8 +1,10 @@
 export type RagDocId = string
 
+export type RagSource = 'upload'
+
 export interface RagDocumentInput {
   id: RagDocId
-  source: 'upload'
+  source: RagSource
   sourceId: string
   title?: string
   text: string
@@ -11,20 +13,25 @@ export interface RagDocumentInput {
   meta?: Record<string, unknown>
 }
 
+export interface RagError {
+  kind: string
+  message: string
+}
+
 export interface RagUpsertResult {
   ok: boolean
   upserted: number
-  error?: { kind: string; message: string }
+  error?: RagError
 }
 
 export interface RagDeleteResult {
   ok: boolean
   deleted: number
-  error?: { kind: string; message: string }
+  error?: RagError
 }
 
 export interface RagQueryFilters {
-  source?: 'upload'
+  source?: RagSource
   sourceId?: string
   mimeType?: string
 }
@@ -32,7 +39,7 @@ export interface RagQueryFilters {
 export interface RagQueryResultItem {
   id: RagDocId
   score: number
-  source: 'upload'
+  source: RagSource
   sourceId: string
   title?: string
   excerpt?: string
@@ -43,7 +50,7 @@ export interface RagQueryResult {
   ok: boolean
   query: string
   results: RagQueryResultItem[]
-  error?: { kind: string; message: string }
+  error?: RagError
 }
 
 export interface RagService {
