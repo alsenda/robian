@@ -37,6 +37,12 @@ function App() {
   })
 
   useEffect(() => {
+    if (view !== 'chat') return
+    const raf = requestAnimationFrame(() => scrollToBottom('auto'))
+    return () => cancelAnimationFrame(raf)
+  }, [view, scrollToBottom])
+
+  useEffect(() => {
     const raf = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(raf)
   }, [])
@@ -91,11 +97,12 @@ function App() {
 
     setInput('')
 
+    // Mirror the same rAF + auto scroll used for streaming AI updates.
+    requestAnimationFrame(() => scrollToBottom('auto'))
+
     // Keep focus in the input so you can immediately type again
     requestAnimationFrame(() => inputRef.current?.focus())
     await sendMessage(content)
-
-    scrollToBottom('smooth')
   }
 
   const onRestart = () => {
