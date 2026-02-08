@@ -6,9 +6,14 @@ import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 
 import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
-import { toOpenAiMessages } from './utils/messages.js'
-import { dateTodayDef, fetchUrlDef, searchWebDef, toOpenAiTools } from './tools/index.js'
-import { streamOllamaOpenAiOnce } from './ollama/client.js'
+import { toChatCompletionsMessages } from './utils/messages.js'
+import {
+  dateTodayDef,
+  fetchUrlDef,
+  searchWebDef,
+  toChatCompletionsTools,
+} from './tools/index.js'
+import { streamOllamaChatCompletionsOnce } from './ollama/client.js'
 import { streamChatWithTools } from './streamChat.js'
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
@@ -47,19 +52,19 @@ export async function handleChat(req, res) {
     const requestId = randomUUID()
 
     const modelMessages = convertMessagesToModelMessages(messages)
-    const openAiMessages = toOpenAiMessages(modelMessages)
+    const chatCompletionsMessages = toChatCompletionsMessages(modelMessages)
 
-    const tools = toOpenAiTools([searchWebDef, fetchUrlDef, dateTodayDef])
+    const tools = toChatCompletionsTools([searchWebDef, fetchUrlDef, dateTodayDef])
 
     const prefixMessages = getPromptPrefixMessagesForModel(model)
-    const firstConversation = [...prefixMessages, ...openAiMessages]
+    const firstConversation = [...prefixMessages, ...chatCompletionsMessages]
 
     let firstResponse
     try {
-      firstResponse = await streamOllamaOpenAiOnce({
+      firstResponse = await streamOllamaChatCompletionsOnce({
         ollamaUrl,
         model,
-        openAiMessages: firstConversation,
+        chatCompletionsMessages: firstConversation,
         tools,
         requestId,
         abortSignal: abortController.signal,
@@ -104,7 +109,7 @@ export async function handleChat(req, res) {
       ollamaUrl,
       model,
       requestId,
-      openAiMessages,
+      chatCompletionsMessages,
       firstResponse,
       tools,
       abortSignal: abortController.signal,

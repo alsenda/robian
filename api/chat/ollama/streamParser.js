@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-export function createOpenAiStreamParser({ requestId, model, abortSignal }) {
+export function createChatCompletionsStreamParser({ requestId, model, abortSignal }) {
   const state = {
     fullContent: '',
     finishReason: 'stop',
@@ -80,7 +80,7 @@ export function createOpenAiStreamParser({ requestId, model, abortSignal }) {
               if (typeof toolDelta?.id === 'string' && toolDelta.id) {
                 existing.id = toolDelta.id
               }
-              // Support OpenAI-style tool_calls as well as variants that use
+              // Support streamed tool_calls deltas as well as provider variants that use
               // { name, parameters } or legacy function_call shapes.
               const functionPayload =
                 toolDelta?.function && typeof toolDelta.function === 'object'

@@ -10,7 +10,9 @@ export function getTextContent(content) {
   return String(content)
 }
 
-export function toOpenAiMessages(modelMessages) {
+// Converts TanStack AI model messages into the Chat Completions wire format
+// expected by Ollama's `/v1/chat/completions` endpoint.
+export function toChatCompletionsMessages(modelMessages) {
   return modelMessages
     .map((msg) => ({
       role: msg.role,

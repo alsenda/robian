@@ -1,7 +1,7 @@
-export async function streamOllamaOpenAiOnce({
+export async function streamOllamaChatCompletionsOnce({
   ollamaUrl,
   model,
-  openAiMessages,
+  chatCompletionsMessages,
   tools,
   requestId,
   abortSignal,
@@ -11,7 +11,7 @@ export async function streamOllamaOpenAiOnce({
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
-      messages: openAiMessages,
+      messages: chatCompletionsMessages,
       stream: true,
       tools,
       tool_choice: 'auto',

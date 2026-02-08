@@ -21,7 +21,21 @@ A lightweight AI chat application built with Preact and TanStack AI.
 
    This app uses a locally running Ollama server.
 
-   Make sure Ollama is running and you have a model pulled (e.g. `robian:latest`).
+   Install Ollama, then create the Robian model from the included `Modelfile`:
+
+   ```bash
+   # Ensure the base model exists (used by Modelfile: FROM llama3.2)
+   ollama pull llama3.2
+
+   # Create the custom model in this repo
+   ollama create robian -f Modelfile
+   ```
+
+   Start Ollama (if it isn't already running), and optionally sanity-check:
+
+   ```bash
+   ollama run robian "Say hi"
+   ```
 
    Optional: create a `.env` file in the root directory:
    ```

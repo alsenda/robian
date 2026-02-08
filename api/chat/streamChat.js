@@ -1,13 +1,13 @@
 import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
-import { streamOllamaOpenAiOnce } from './ollama/client.js'
-import { createOpenAiStreamParser } from './ollama/streamParser.js'
+import { streamOllamaChatCompletionsOnce } from './ollama/client.js'
+import { createChatCompletionsStreamParser } from './ollama/streamParser.js'
 import { dateTodayTool, fetchUrlTool, searchWebTool } from './tools/index.js'
 
 export async function* streamChatWithTools({
   ollamaUrl,
   model,
   requestId,
-  openAiMessages,
+  chatCompletionsMessages,
   firstResponse,
   tools,
   abortSignal,
@@ -15,7 +15,7 @@ export async function* streamChatWithTools({
   const serverTools = [fetchUrlTool, searchWebTool, dateTodayTool]
 
   const prefixMessages = getPromptPrefixMessagesForModel(model)
-  const conversation = [...prefixMessages, ...openAiMessages]
+  const conversation = [...prefixMessages, ...chatCompletionsMessages]
 
   for (let iteration = 0; iteration < 3; iteration++) {
     if (abortSignal?.aborted) return
@@ -23,10 +23,10 @@ export async function* streamChatWithTools({
     let response = firstResponse
     if (iteration > 0 || !response) {
       try {
-        response = await streamOllamaOpenAiOnce({
+        response = await streamOllamaChatCompletionsOnce({
           ollamaUrl,
           model,
-          openAiMessages: conversation,
+          chatCompletionsMessages: conversation,
           tools,
           requestId,
           abortSignal,
@@ -65,7 +65,7 @@ export async function* streamChatWithTools({
 
     firstResponse = null
 
-    const { state, parse } = createOpenAiStreamParser({
+    const { state, parse } = createChatCompletionsStreamParser({
       requestId,
       model,
       abortSignal,

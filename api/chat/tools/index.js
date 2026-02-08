@@ -4,7 +4,8 @@ export { fetchUrlDef, fetchUrlTool } from './fetchUrl/fetchUrl.tool.js'
 export { searchWebDef, searchWebTool } from './searchWeb/searchWeb.tool.js'
 export { dateTodayDef, dateTodayTool } from './date/dateToday.tool.js'
 
-export function toOpenAiTools(tools) {
+// Converts TanStack AI tool definitions into the Chat Completions `tools` wire format.
+export function toChatCompletionsTools(tools) {
   return tools.map((tool) => ({
     type: 'function',
     function: {

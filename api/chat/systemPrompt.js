@@ -19,7 +19,7 @@ export function getPromptPrefixMessagesForModel(model) {
   const isRobian = modelName === 'robian' || modelName.startsWith('robian:')
 
   // Ollama models created via Modelfile can have their own SYSTEM prompt.
-  // In the OpenAI-compatible API, sending a `system` message can replace that.
+  // In the chat-completions API, sending a `system` message can replace that.
   // For Robian, we inject tool guidance as a prefix assistant message instead.
   return isRobian
     ? [{ role: 'assistant', content: TOOLING_GUIDANCE }]
