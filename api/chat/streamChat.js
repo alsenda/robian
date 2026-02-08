@@ -1,4 +1,4 @@
-import { getSystemPromptForModel } from './systemPrompt.js'
+import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
 import { streamOllamaOpenAiOnce } from './ollama/client.js'
 import { createOpenAiStreamParser } from './ollama/streamParser.js'
 import { dateTodayTool, fetchUrlTool, searchWebTool } from './tools/index.js'
@@ -14,10 +14,8 @@ export async function* streamChatWithTools({
 }) {
   const serverTools = [fetchUrlTool, searchWebTool, dateTodayTool]
 
-  const systemContent = getSystemPromptForModel(model)
-  const conversation = systemContent
-    ? [{ role: 'system', content: systemContent }, ...openAiMessages]
-    : [...openAiMessages]
+  const prefixMessages = getPromptPrefixMessagesForModel(model)
+  const conversation = [...prefixMessages, ...openAiMessages]
 
   for (let iteration = 0; iteration < 3; iteration++) {
     if (abortSignal?.aborted) return

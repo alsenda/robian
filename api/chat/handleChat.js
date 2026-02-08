@@ -5,7 +5,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 
-import { getSystemPromptForModel } from './systemPrompt.js'
+import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
 import { toOpenAiMessages } from './utils/messages.js'
 import { dateTodayDef, fetchUrlDef, searchWebDef, toOpenAiTools } from './tools/index.js'
 import { streamOllamaOpenAiOnce } from './ollama/client.js'
@@ -55,10 +55,8 @@ export async function handleChat(req, res) {
 
     const tools = toOpenAiTools([searchWebDef, fetchUrlDef, dateTodayDef])
 
-    const systemContent = getSystemPromptForModel(model)
-    const firstConversation = systemContent
-      ? [{ role: 'system', content: systemContent }, ...openAiMessages]
-      : [...openAiMessages]
+    const prefixMessages = getPromptPrefixMessagesForModel(model)
+    const firstConversation = [...prefixMessages, ...openAiMessages]
 
     let firstResponse
     try {

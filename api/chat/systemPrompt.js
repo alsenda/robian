@@ -1,5 +1,5 @@
-const TOOLING_SYSTEM_PROMPT = [
-  'You are a helpful assistant with access to tools.',
+const TOOLING_GUIDANCE = [
+  'Tooling guidance:',
   "When the user asks for today's date, the current date, or what date it is, ALWAYS call the date_today tool and answer using its result.",
   "You can use date_today to get the current date whenever it's relevant, even if the user doesn't explicitly ask for it, to ensure your answers are accurate and up-to-date.",
   'Use web tools only for factual lookups that require external information not present in the conversation.',
@@ -13,14 +13,16 @@ const TOOLING_SYSTEM_PROMPT = [
   'Never use web tools for current time or date; use date_today.',
 ].join(' ')
 
-export function getSystemPromptForModel(model) {
+export function getPromptPrefixMessagesForModel(model) {
   const modelName = String(model || '').toLowerCase()
   const isRobian = modelName === 'robian' || modelName.startsWith('robian:')
 
   // Ollama models created via Modelfile can have their own SYSTEM prompt.
-  // In the OpenAI-compatible API, sending any `system` message can replace that.
-  // So for Robian, we avoid a system message and rely on tool descriptions + model SYSTEM.
-  return isRobian ? '' : TOOLING_SYSTEM_PROMPT
+  // In the OpenAI-compatible API, sending a `system` message can replace that.
+  // For Robian, we inject tool guidance as a prefix assistant message instead.
+  return isRobian
+    ? [{ role: 'assistant', content: TOOLING_GUIDANCE }]
+    : [{ role: 'system', content: TOOLING_GUIDANCE }]
 }
 
-export const SYSTEM_PROMPT = TOOLING_SYSTEM_PROMPT
+export const SYSTEM_PROMPT = TOOLING_GUIDANCE
