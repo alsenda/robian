@@ -111,13 +111,13 @@ function App() {
   }
 
   return (
-    <div className="fixed inset-0 z-10 bg-yellow-300">
+    <div className="fixed inset-0 z-10 bg-violet-100">
       <div
         className="relative flex h-full w-full items-center justify-center p-6"
         role="application"
         aria-label="AI chat"
       >
-        <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden border-4 border-black bg-white shadow-2xl shadow-black/40">
+        <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden border-4 border-black bg-white shadow-brutal">
           <ChatHeader onRestart={onRestart} />
 
           <ChatMessages

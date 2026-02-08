@@ -4,18 +4,18 @@ import { renderMessageText } from '../messageText.js'
 export function ChatMessages({ messages, isLoading, error, messagesViewportRef, bottomRef }) {
   return (
     <div
-      className="relative z-0 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-white px-5 py-5"
+      className="relative z-0 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-sky-100 px-5 py-5"
       ref={messagesViewportRef}
     >
       {error && (
-        <div className="relative flex max-w-[86%] flex-col gap-2 border-4 border-black bg-white px-4 py-3 text-black shadow-lg shadow-black/25">
+        <div className="relative flex max-w-[86%] flex-col gap-2 border-4 border-black bg-orange-200 px-4 py-3 text-black shadow-brutal-sm">
           <div className="text-[11px] font-black uppercase tracking-widest">Error</div>
           <div className="leading-6">{error.message}</div>
         </div>
       )}
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center px-4">
-          <div className="max-w-2xl border-4 border-black bg-yellow-200 px-5 py-4 text-black shadow-2xl shadow-black/35">
+          <div className="max-w-2xl border-4 border-black bg-pink-200 px-5 py-4 text-black shadow-brutal">
             <div className="text-2xl font-black leading-tight">
               How can I help you in the Neobrutalism style?
             </div>
@@ -30,8 +30,8 @@ export function ChatMessages({ messages, isLoading, error, messagesViewportRef, 
           key={index}
           className={
             message.role === 'user'
-              ? 'relative flex max-w-[86%] flex-col gap-2 self-end border-4 border-black bg-fuchsia-500 px-4 py-3 text-white shadow-lg shadow-black/25'
-              : 'relative flex max-w-[86%] flex-col gap-2 self-start border-4 border-black bg-white px-4 py-3 text-black shadow-lg shadow-black/25'
+              ? 'relative flex max-w-[86%] flex-col gap-2 self-end border-4 border-black bg-fuchsia-500 px-4 py-3 text-white shadow-brutal-sm'
+              : 'relative flex max-w-[86%] flex-col gap-2 self-start border-4 border-black bg-white px-4 py-3 text-black shadow-brutal-sm'
           }
         >
           <div className="text-[11px] font-black uppercase tracking-widest">
