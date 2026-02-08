@@ -17,7 +17,7 @@ export function createApp(): express.Express {
   app.post('/api/chat', createHandleChat({ ragService }))
 
   // Uploads feature
-  app.use('/api/uploads', createUploadsRouter({ ragService }))
+  app.use('/api/uploads', createUploadsRouter({ rag: ragService }))
 
   return app
 }

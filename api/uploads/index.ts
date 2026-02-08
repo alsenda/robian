@@ -17,7 +17,7 @@ import { isTextLikeExtension } from './security/allowedTypes.ts'
 import type { RagService, RagDocumentInput } from '../rag/types.ts'
 
 export interface CreateUploadsRouterDeps {
-  ragService: RagService
+  rag: RagService
 }
 
 const RAG_MAX_UPSERT_BYTES = 1_000_000
@@ -28,14 +28,14 @@ function isNotImplementedError(result: { error?: { kind?: string } } | null | un
 }
 
 async function bestEffortUpsertToRag({
-  ragService,
+  rag,
   doc,
 }: {
-  ragService: RagService
+  rag: RagService
   doc: RagDocumentInput
 }): Promise<void> {
   try {
-    const out = await ragService.upsertDocuments([doc])
+    const out = await rag.upsertDocuments([doc])
     if (isNotImplementedError(out)) {
       if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
         console.log('[uploads] RAG upsert skipped (not implemented)')
@@ -51,9 +51,9 @@ async function bestEffortUpsertToRag({
   }
 }
 
-async function bestEffortDeleteFromRag({ ragService, id }: { ragService: RagService; id: string }): Promise<void> {
+async function bestEffortDeleteFromRag({ rag, id }: { rag: RagService; id: string }): Promise<void> {
   try {
-    const out = await ragService.deleteDocuments([id])
+    const out = await rag.deleteDocuments([id])
     if (isNotImplementedError(out)) {
       if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
         console.log('[uploads] RAG delete skipped (not implemented)')
@@ -66,7 +66,7 @@ async function bestEffortDeleteFromRag({ ragService, id }: { ragService: RagServ
 }
 
 export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Router {
-  const ragService = deps.ragService
+  const rag = deps.rag
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -148,7 +148,7 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
           },
         }
 
-        void bestEffortUpsertToRag({ ragService, doc })
+        void bestEffortUpsertToRag({ rag, doc })
       }
 
       return res.status(200).json({ ok: true, upload: entry })
@@ -217,7 +217,7 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
     await deleteStoredFile(entry)
     await deleteManifestEntry(id)
 
-    void bestEffortDeleteFromRag({ ragService, id })
+    void bestEffortDeleteFromRag({ rag, id })
 
     return res.status(200).json({ ok: true })
   })

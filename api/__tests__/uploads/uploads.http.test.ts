@@ -199,6 +199,9 @@ describe('uploads HTTP API (TS)', () => {
     const createdAt = String(uploadRes.body.upload?.createdAt || '')
     expect(createdAt).toMatch(/\d{4}-\d{2}-\d{2}T/)
 
+    // best-effort work is async; allow it to run
+    await new Promise((r) => setTimeout(r, 0))
+
     // best-effort: should have attempted upsert
     expect(upsertDocuments).toHaveBeenCalledTimes(1)
     const calls = upsertDocuments.mock.calls as unknown as unknown[][]
@@ -215,5 +218,13 @@ describe('uploads HTTP API (TS)', () => {
     expect(String(docsArg[0]?.createdAt || '')).toBe(createdAt)
     expect(String(docsArg[0]?.text || '')).toContain('hello rag')
     expect(docsArg[0]?.meta && typeof docsArg[0]?.meta === 'object').toBe(true)
+
+    const delRes = await request(app).delete(`/api/uploads/${encodeURIComponent(uploadId)}`)
+    expect(delRes.status).toBe(200)
+    expect(delRes.body.ok).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deleteDocuments).toHaveBeenCalledTimes(1)
+    expect(deleteDocuments).toHaveBeenCalledWith([uploadId])
   })
 })
