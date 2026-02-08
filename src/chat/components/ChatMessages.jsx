@@ -4,7 +4,7 @@ import { renderMessageText } from '../messageText.js'
 export function ChatMessages({ messages, isLoading, error, messagesViewportRef, bottomRef }) {
   return (
     <div
-      className="relative z-0 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-sky-100 px-5 py-5"
+      className="brutal-scroll relative z-0 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-sky-100 px-5 py-5"
       ref={messagesViewportRef}
     >
       {error && (
