@@ -67,6 +67,63 @@ function shimPdfJsGlobalsForNode(): void {
   } catch {
     // ignore
   }
+
+  // pdfjs-dist's legacy build may reference some DOM globals at import time.
+  // For text extraction we don't need full implementations; we just need
+  // them to exist so module evaluation doesn't throw.
+  try {
+    const gg = globalThis as unknown as Record<string, unknown>
+
+    if (typeof gg.DOMMatrix !== 'function') {
+      class DOMMatrixShim {
+        a = 1
+        b = 0
+        c = 0
+        d = 1
+        e = 0
+        f = 0
+
+        constructor(init?: unknown) {
+          if (Array.isArray(init) && init.length >= 6) {
+            this.a = Number(init[0])
+            this.b = Number(init[1])
+            this.c = Number(init[2])
+            this.d = Number(init[3])
+            this.e = Number(init[4])
+            this.f = Number(init[5])
+          } else if (init && typeof init === 'object') {
+            const o = init as Partial<DOMMatrixShim>
+            if (typeof o.a === 'number') this.a = o.a
+            if (typeof o.b === 'number') this.b = o.b
+            if (typeof o.c === 'number') this.c = o.c
+            if (typeof o.d === 'number') this.d = o.d
+            if (typeof o.e === 'number') this.e = o.e
+            if (typeof o.f === 'number') this.f = o.f
+          }
+        }
+
+        toFloat64Array(): Float64Array {
+          return new Float64Array([this.a, this.b, this.c, this.d, this.e, this.f])
+        }
+      }
+
+      gg.DOMMatrix = DOMMatrixShim
+    }
+
+    if (typeof gg.Path2D !== 'function') {
+      gg.Path2D = class Path2DShim {
+        // no-op
+      }
+    }
+
+    if (typeof gg.ImageData !== 'function') {
+      gg.ImageData = class ImageDataShim {
+        // no-op
+      }
+    }
+  } catch {
+    // ignore
+  }
 }
 
 function readNumberEnv(name: string, fallback: number): number {
@@ -171,8 +228,10 @@ export async function extractTextFromPdf(input: Buffer): Promise<PdfExtractResul
   // Dynamic import avoids bundler/runtime edge cases in NodeNext ESM.
   const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as PdfJsModule
 
+  const data = new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+
   const loadingTask = pdfjs.getDocument({
-    data: input,
+    data,
     disableWorker: true,
     stopAtErrors: false,
   })
