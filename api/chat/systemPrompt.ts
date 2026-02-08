@@ -16,11 +16,12 @@ const TOOLING_GUIDANCE = [
 
 const LOCAL_FILES_AND_RAG_AUTONOMY = [
   'Local files and RAG (autonomous use):',
-  'You are explicitly permitted to call rag_search_uploads even when the user did not ask you to use it.',
-  'Tool-first decision rule: if the user question is likely answered (even partially) by the user\'s uploaded files, call rag_search_uploads BEFORE answering. Prefer searching over guessing.',
+  'You are explicitly permitted to call the tool `rag_search_uploads` even when the user did not ask you to use it.',
+  'Tool-first decision rule: if the user question is likely answered (even partially) by the user\'s uploaded files, call `rag_search_uploads` BEFORE answering. Prefer searching over guessing.',
   'Triggers (call RAG): questions about the contents of a document/upload; requests for exact wording, figures, dates, requirements, or policy language; when the user references a file by name; when you are uncertain and an answer must be grounded in the user\'s files.',
   'Scoping: when you can identify the relevant upload, set rag_search_uploads.sourceId to that upload id (use list_uploads first if needed). Otherwise, search across uploads without sourceId.',
-  'Search budget: you may perform up to 2 RAG searches total for a question: (1) an initial query, then (2) one rewritten query if results are empty or clearly weak/irrelevant.',
+  'Search budget: you may perform up to 2 RAG searches total for a question: (1) an initial query, then (2) one rewritten query if results are empty OR weak.',
+  'Weak-results rule: consider results weak if no results are returned OR the best result score < 0.45 (scores are cosine similarity; higher is better). In that case, rewrite the query and call `rag_search_uploads` once more.',
   'Citations are required for any claims grounded in local files: cite using tool metadata with filename + page range + chunk id. Use a compact format like [source: <filename> p.<start>-<end> chunk:<chunkId>].',
   'If after 2 searches you still cannot find relevant results, say you cannot find this information in the user\'s uploaded files and do NOT guess or fabricate.',
 ].join(' ')
