@@ -46,10 +46,6 @@ export async function handleChat(req, res) {
     const model = process.env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL
     const requestId = randomUUID()
 
-    if (process.env.NODE_ENV !== 'test') {
-      console.log(`[chat] model: ${model}`)
-    }
-
     const modelMessages = convertMessagesToModelMessages(messages)
     const openAiMessages = toOpenAiMessages(modelMessages)
 
