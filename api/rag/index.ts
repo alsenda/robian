@@ -69,7 +69,7 @@ export function createRagService(config?: RagServiceConfig): RagService {
   }
 
   function getDbPath(): string {
-    return String(process.env.RAG_DB_PATH || 'data/rag.sqlite').trim()
+    return String(process.env.RAG_DB_PATH || '').trim()
   }
 
   const ragConfig = {

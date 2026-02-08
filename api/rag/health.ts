@@ -53,7 +53,7 @@ function getProvider(): 'stub' | 'sqlite' {
 }
 
 function getDbPathConfigured(): string {
-  return String(process.env.RAG_DB_PATH || 'data/rag.sqlite').trim()
+  return String(process.env.RAG_DB_PATH || '').trim()
 }
 
 function getOllamaUrl(): string {

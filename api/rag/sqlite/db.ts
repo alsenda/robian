@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 
@@ -31,7 +32,10 @@ export interface RagChunkRow {
 }
 
 function resolveDbPath(dbPath: string): string {
-  const p = String(dbPath || '').trim() || 'data/rag.sqlite'
+  const raw = String(dbPath || '').trim()
+  const isTestEnv = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST)
+
+  const p = raw || (isTestEnv ? path.join(os.tmpdir(), 'robian-rag.test.sqlite') : 'data/rag.sqlite')
   return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p)
 }
 
