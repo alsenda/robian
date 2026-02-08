@@ -6,5 +6,5 @@ export interface EmbeddingsError {
 }
 
 export interface EmbeddingsService {
-  embedText(input: string): Promise<EmbeddingVector>
+  embedText(input: string, maxChars?: number): Promise<EmbeddingVector>
 }

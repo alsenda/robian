@@ -29,14 +29,11 @@ function isNonEmptyNumberArray(value: unknown): value is number[] {
   return value.every((v) => typeof v === 'number' && Number.isFinite(v))
 }
 
-export function truncateEmbeddingInput(input: string, maxChars: number): string {
-  const text = String(input ?? '')
-  if (!Number.isFinite(maxChars) || maxChars <= 0) return text
-  if (text.length <= maxChars) return text
-
-  const marker = `\n[TRUNCATED to ${Math.floor(maxChars)} chars]`
-  const keep = Math.max(0, maxChars - marker.length)
-  return text.slice(0, keep) + marker
+function maybeTruncate(input: string, maxChars?: number): string {
+  if (typeof maxChars !== 'number' || !Number.isFinite(maxChars) || maxChars <= 0) return input
+  const cap = Math.floor(maxChars)
+  if (input.length <= cap) return input
+  return input.slice(0, cap) + '\n\n[TRUNCATED]'
 }
 
 export function createOllamaEmbeddingsService({
@@ -52,7 +49,7 @@ export function createOllamaEmbeddingsService({
   const configuredModel = String(model || '').trim()
 
   return {
-    async embedText(input: string): Promise<EmbeddingVector> {
+    async embedText(input: string, maxChars?: number): Promise<EmbeddingVector> {
       const trimmed = String(input ?? '').trim()
       if (!trimmed) {
         throw {
@@ -60,6 +57,8 @@ export function createOllamaEmbeddingsService({
           message: 'Embedding input is empty',
         } satisfies EmbeddingsError
       }
+
+      const prepared = maybeTruncate(trimmed, maxChars)
 
       const abortController = new AbortController()
       const timeout = setTimeout(() => abortController.abort(), timeoutMs)
@@ -69,13 +68,13 @@ export function createOllamaEmbeddingsService({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: configuredModel, input: trimmed }),
+          body: JSON.stringify({ model: configuredModel, input: prepared }),
           signal: abortController.signal,
         })
 
         if (!resp.ok) {
           throw {
-            kind: 'http_error',
+            kind: 'network',
             message: `Embeddings request failed (HTTP ${resp.status}) for model "${configuredModel}"`,
           } satisfies EmbeddingsError
         }
@@ -89,16 +88,14 @@ export function createOllamaEmbeddingsService({
         if (!Array.isArray(embeddings)) {
           throw {
             kind: 'unsupported_model',
-            message:
-              `Ollama embed response for model "${configuredModel}" did not include embeddings. ` +
-              'If this model does not support /api/embed, set OLLAMA_EMBED_MODEL to a dedicated embedding model later.',
+            message: `Ollama embed response for model "${configuredModel}" did not include embeddings`,
           } satisfies EmbeddingsError
         }
 
         const first = embeddings[0]
         if (!Array.isArray(first) || !isNonEmptyNumberArray(first)) {
           throw {
-            kind: 'invalid_response',
+            kind: 'unsupported_model',
             message: `Invalid embeddings payload for model "${configuredModel}"`,
           } satisfies EmbeddingsError
         }
@@ -107,11 +104,24 @@ export function createOllamaEmbeddingsService({
       } catch (error: unknown) {
         if (abortController.signal.aborted) {
           throw {
-            kind: 'timeout',
+            kind: 'network',
             message: `Embeddings request timed out for model "${configuredModel}"`,
           } satisfies EmbeddingsError
         }
-        throw asEmbeddingsError(error)
+
+        const normalized = asEmbeddingsError(error)
+        if (
+          normalized.kind === 'invalid_input' ||
+          normalized.kind === 'unsupported_model' ||
+          normalized.kind === 'network'
+        ) {
+          throw normalized
+        }
+
+        throw {
+          kind: 'network',
+          message: normalized.message,
+        } satisfies EmbeddingsError
       } finally {
         clearTimeout(timeout)
       }

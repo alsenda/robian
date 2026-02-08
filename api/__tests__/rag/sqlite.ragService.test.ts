@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { openSqliteDb } from '../../rag/sqlite/db.ts'
+import { openRagSqliteDb } from '../../rag/sqlite/db.ts'
 import { createSqliteRagService } from '../../rag/sqlite/ragService.sqlite.ts'
 import type { EmbeddingsService } from '../../embeddings/types.ts'
 
@@ -42,7 +42,7 @@ describe('sqlite rag provider', () => {
     dbPath = makeTempDbPath()
 
     const embeddings: EmbeddingsService = {
-      async embedText(input: string): Promise<number[]> {
+      async embedText(input: string, _maxChars?: number): Promise<number[]> {
         const t = String(input)
         if (t.startsWith('A')) return [1, 0]
         if (t.startsWith('B')) return [0, 1]
@@ -50,19 +50,19 @@ describe('sqlite rag provider', () => {
       },
     }
 
-    const db = openSqliteDb(dbPath)
+    const db = openRagSqliteDb(dbPath)
     try {
       const rag = createSqliteRagService({
         db,
         embeddings,
         config: {
           chunkSizeChars: 5,
-          chunkOverlapChars: 0,
-          maxTextCharsPerDoc: 200_000,
+          overlapChars: 0,
+          maxDocChars: 200_000,
           maxQueryChars: 4000,
           candidateLimit: 5000,
+          excerptChars: 240,
         },
-        embeddingsHealth: { ok: true },
       })
 
       const out = await rag.upsertDocuments([
@@ -80,6 +80,9 @@ describe('sqlite rag provider', () => {
 
       expect(out.ok).toBe(true)
       expect(out.upserted).toBe(2)
+
+      const rows = db.selectCandidates({ limit: 10_000 })
+      expect(rows.length).toBe(2)
     } finally {
       try {
         db.close()
@@ -93,7 +96,7 @@ describe('sqlite rag provider', () => {
     dbPath = makeTempDbPath()
 
     const embeddings: EmbeddingsService = {
-      async embedText(input: string): Promise<number[]> {
+      async embedText(input: string, _maxChars?: number): Promise<number[]> {
         const t = String(input)
         if (t.startsWith('A')) return [1, 0]
         if (t.startsWith('B')) return [0, 1]
@@ -101,19 +104,19 @@ describe('sqlite rag provider', () => {
       },
     }
 
-    const db = openSqliteDb(dbPath)
+    const db = openRagSqliteDb(dbPath)
     try {
       const rag = createSqliteRagService({
         db,
         embeddings,
         config: {
           chunkSizeChars: 5,
-          chunkOverlapChars: 0,
-          maxTextCharsPerDoc: 200_000,
+          overlapChars: 0,
+          maxDocChars: 200_000,
           maxQueryChars: 4000,
           candidateLimit: 5000,
+          excerptChars: 240,
         },
-        embeddingsHealth: { ok: true },
       })
 
       await rag.upsertDocuments([
