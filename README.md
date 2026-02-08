@@ -19,9 +19,19 @@ A lightweight local Ollama chat app (Robian) built with Preact and TanStack AI.
 
 2. **Configure Ollama (required)**
 
-   This app uses a locally running Ollama server.
+   This app uses a locally running Ollama server and needs **two models**:
 
-   Install Ollama, then create the Robian model from the included `Modelfile`:
+   - **Chat model** (used by the chat UI and RAG answering)
+   - **Embedding model** (used by RAG to build/search vectors)
+
+   Install Ollama, then make sure you have an embeddings model available (required for RAG):
+
+   ```bash
+   # Embeddings model required for RAG (/api/embed)
+   ollama pull nomic-embed-text
+   ```
+
+   For the chat model, you can either create the repo's custom model from the included `Modelfile`:
 
    ```bash
    # Ensure the base model exists (used by Modelfile: FROM llama3.2)
@@ -31,6 +41,8 @@ A lightweight local Ollama chat app (Robian) built with Preact and TanStack AI.
    ollama create robian -f Modelfile
    ```
 
+   Or, if you already have your own custom chat model (e.g. a custom `llama3.2` tag), you can skip `ollama create` and just point the app at your model via env vars.
+
    Start Ollama (if it isn't already running), and optionally sanity-check:
 
    ```bash
@@ -39,8 +51,18 @@ A lightweight local Ollama chat app (Robian) built with Preact and TanStack AI.
 
    Optional: create a `.env` file in the root directory:
    ```
+   # Chat endpoint (/api/chat)
    OLLAMA_URL=http://localhost:11434
    OLLAMA_MODEL=robian:latest
+
+   # RAG embeddings (required for ingest/search)
+   OLLAMA_EMBED_MODEL=nomic-embed-text:latest
+
+   # Optional: override which model answers /api/rag/ask
+   # (defaults to OLLAMA_MODEL if not set)
+   # OLLAMA_CHAT_MODEL=robian:latest
+   # Optional: override base URL used by the RAG pipeline (defaults to localhost)
+   # OLLAMA_BASE_URL=http://localhost:11434
    ```
 
 ## RAG (Local Documents)
@@ -62,6 +84,12 @@ RAG_EMBED_BATCH_SIZE=32
 Notes:
 - `OLLAMA_BASE_URL` is used by the RAG embedding + ask pipeline.
 - `OLLAMA_URL` / `OLLAMA_MODEL` are still used by the existing `/api/chat` endpoint; you can point both base URLs to the same local Ollama instance.
+
+If RAG fails with an embeddings error, double-check you have the embeddings model installed:
+
+```bash
+ollama pull nomic-embed-text
+```
 
 ### Ingest endpoints
 
