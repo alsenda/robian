@@ -49,8 +49,19 @@ A lightweight AI chat application built with Preact and TanStack AI.
 
 - **Frontend**: Preact + TanStack AI Preact hooks
 - **Backend**: Express server that streams from local Ollama (`/api/chat`)
-- **Styling**: Custom CSS with modern chat UI
+- **Styling**: Tailwind CSS (v4)
 - **Bundler**: Vite with esbuild
+
+## Running in production (single server)
+
+The API server can also serve the built frontend (including Tailwind CSS).
+
+```bash
+npm run build
+NODE_ENV=production node server.js
+```
+
+Then open `http://localhost:3001`.
 
 ## Scripts
 

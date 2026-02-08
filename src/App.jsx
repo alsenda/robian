@@ -1,7 +1,6 @@
 import { useChat } from '@tanstack/ai-react'
 import { fetchServerSentEvents } from '@tanstack/ai-client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import './App.css'
 
 import { ChatHeader } from './chat/components/ChatHeader.jsx'
 import { ChatInput } from './chat/components/ChatInput.jsx'
@@ -77,25 +76,31 @@ function App() {
   }
 
   return (
-    <div className="chat-shell">
-      <div className="chat-panel" role="application" aria-label="AI chat">
-        <ChatHeader onRestart={onRestart} />
+    <div className="fixed inset-0 z-10 bg-yellow-300">
+      <div
+        className="relative flex h-full w-full items-center justify-center p-6"
+        role="application"
+        aria-label="AI chat"
+      >
+        <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden border-4 border-black bg-white shadow-2xl shadow-black/40">
+          <ChatHeader onRestart={onRestart} />
 
-        <ChatMessages
-          messages={messages}
-          isLoading={isLoading}
-          error={error}
-          messagesViewportRef={messagesViewportRef}
-          bottomRef={bottomRef}
-        />
+          <ChatMessages
+            messages={messages}
+            isLoading={isLoading}
+            error={error}
+            messagesViewportRef={messagesViewportRef}
+            bottomRef={bottomRef}
+          />
 
-        <ChatInput
-          inputRef={inputRef}
-          input={input}
-          setInput={setInput}
-          onSubmit={onSubmit}
-          isLoading={isLoading}
-        />
+          <ChatInput
+            inputRef={inputRef}
+            input={input}
+            setInput={setInput}
+            onSubmit={onSubmit}
+            isLoading={isLoading}
+          />
+        </div>
       </div>
     </div>
   )

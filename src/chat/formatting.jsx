@@ -43,7 +43,14 @@ function renderInline(text) {
         break
       }
       const content = text.slice(nextIndex + 1, end)
-      nodes.push(<code key={`c-${nextIndex}`}>{content}</code>)
+      nodes.push(
+        <code
+          key={`c-${nextIndex}`}
+          className="border-2 border-black bg-yellow-200 px-1 py-0.5 font-mono text-[0.95em] font-semibold"
+        >
+          {content}
+        </code>,
+      )
       i = end + 1
       continue
     }
@@ -135,7 +142,7 @@ export function renderFormattedText(rawText) {
   return blocks.map((block, idx) => {
     if (block.type === 'h') {
       return (
-        <div key={`h-${idx}`} className="message-heading">
+        <div key={`h-${idx}`} className="mb-2 mt-2 inline-block border-b-4 border-black bg-yellow-200 px-2 py-1 font-black uppercase tracking-widest">
           {renderInline(block.text)}
         </div>
       )
