@@ -2,10 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EMBEDDING_DIM } from "../../../src/server/db/constants.ts";
 import { closeDb, getDb, initDb } from "../../../src/server/db/index.ts";
+import { wipeRagDb } from "../../../src/server/db/wipeRagDb.ts";
 
 vi.mock("../../../src/server/rag/embeddings/ollama.ts", () => {
   function makeVec(hotIndex: number): number[] {
@@ -25,32 +26,18 @@ vi.mock("../../../src/server/rag/embeddings/ollama.ts", () => {
   };
 });
 
-interface Cleanup { dbPath: string; dir: string; }
-
-function makeTempDb(): Cleanup {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rag-ingest-test-"));
-  const dbPath = path.join(dir, "rag.sqlite");
-  return { dbPath, dir };
-}
-
 describe("ingestDocument", () => {
-  let cleanup: Cleanup;
-
   beforeAll(() => {
-    cleanup = makeTempDb();
-    process.env.RAG_DB_PATH = cleanup.dbPath;
-    initDb({ dbPath: cleanup.dbPath });
+    initDb();
+  });
+
+  beforeEach(() => {
+    wipeRagDb(getDb());
   });
 
   afterAll(() => {
     try {
       closeDb();
-    } catch {
-      // ignore
-    }
-
-    try {
-      fs.rmSync(cleanup.dir, { recursive: true, force: true });
     } catch {
       // ignore
     }

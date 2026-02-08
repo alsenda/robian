@@ -92,6 +92,7 @@ describe("uploads tools (TS)", () => {
   });
 
   it("rag_search_uploads calls rag.query with upload filters and returns output", async () => {
+    const sourceId = "00000000-0000-4000-8000-000000000001";
     const rag = {
       upsertDocuments: async () => ({ ok: true, upserted: 0 }),
       deleteDocuments: async () => ({ ok: true, deleted: 0 }),
@@ -103,7 +104,7 @@ describe("uploads tools (TS)", () => {
             id: "doc:0",
             score: 0.9,
             source: "upload",
-            sourceId: "u1",
+            sourceId,
             title: "t",
             excerpt: "e",
           },
@@ -112,11 +113,53 @@ describe("uploads tools (TS)", () => {
     };
 
     const tool = createRagSearchUploadsTool({ rag: rag as any });
-    const out = (await tool.execute({ query: "q", topK: 5, sourceId: "u1" })) as RagQueryResult;
+    const out = (await tool.execute({ query: "q", topK: 5, sourceId })) as RagQueryResult;
     expect(out.ok).toBe(true);
     expect(out.results.length).toBe(1);
     expect(rag.query).toHaveBeenCalledTimes(1);
-    expect(rag.query).toHaveBeenCalledWith("q", 5, { source: "upload", sourceId: "u1" });
+    expect(rag.query).toHaveBeenCalledWith("q", 5, { source: "upload", sourceId });
+  });
+
+  it("rag_search_uploads coerces topK numeric strings", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: " q ", topK: "1" })) as RagQueryResult;
+    expect(out.ok).toBe(true);
+    expect(rag.query).toHaveBeenCalledWith("q", 1, { source: "upload" });
+  });
+
+  it("rag_search_uploads rejects empty query with details", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: "   ", topK: "1" })) as RagQueryResult;
+    expect(out.ok).toBe(false);
+    expect(out.error?.kind).toBe("invalid_input");
+    expect(String(out.error?.message || "")).toMatch(/non-empty/i);
+    expect(Array.isArray((out.error as any)?.details)).toBe(true);
+    expect(((out.error as any).details as any[]).some((d) => d.field === "query")).toBe(true);
+  });
+
+  it("rag_search_uploads treats sourceId null as undefined", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({ ok: true, query: "q", results: [] })),
+    };
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any });
+    const out = (await tool.execute({ query: "q", sourceId: null })) as RagQueryResult;
+    expect(out.ok).toBe(true);
+    expect(rag.query).toHaveBeenCalledWith("q", 8, { source: "upload" });
   });
 
   it("rag_search_uploads returns ok:false when rag.query throws", async () => {

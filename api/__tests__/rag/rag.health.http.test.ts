@@ -9,7 +9,7 @@ describe("RAG health HTTP API (TS)", () => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
     delete process.env.RAG_PROVIDER;
-    delete process.env.RAG_DB_PATH;
+    // RAG_DB_PATH is set globally to a temp file via vitest.setup.
     delete process.env.OLLAMA_URL;
     delete process.env.OLLAMA_EMBED_MODEL;
   });
@@ -22,21 +22,10 @@ describe("RAG health HTTP API (TS)", () => {
 
   it("returns ok:true when provider is sqlite and embeddings are healthy", async () => {
     process.env.RAG_PROVIDER = "sqlite";
-    process.env.RAG_DB_PATH = "data/test.sqlite";
     process.env.OLLAMA_URL = "http://localhost:11434";
     process.env.OLLAMA_EMBED_MODEL = "embed-model";
 
-    vi.doMock("../../rag/sqlite/db.ts", async () => {
-      const actual = await vi.importActual<typeof import("../../rag/sqlite/db.ts")>("../../rag/sqlite/db.ts");
-      return {
-        ...actual,
-        openSqliteDb: vi.fn(() => ({
-          exec: () => void 0,
-          prepare: () => ({ run: () => ({ changes: 0 }), all: () => [] }),
-          close: () => void 0,
-        })),
-      };
-    });
+    // DB probe uses src/server/db initDb; allow it to run against the temp DB.
 
     vi.doMock("../../embeddings/ollamaEmbeddings.ts", async () => {
       const actual = await vi.importActual<typeof import("../../embeddings/ollamaEmbeddings.ts")>("../../embeddings/ollamaEmbeddings.ts");
@@ -55,28 +44,17 @@ describe("RAG health HTTP API (TS)", () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.provider).toBe("sqlite");
-    expect(res.body.dbPath).toBe("data/test.sqlite");
+    expect(typeof res.body.dbPath).toBe("string");
     expect(res.body.embedModel).toBe("embed-model");
     expect(res.body.error).toBeUndefined();
   });
 
   it("returns ok:false when embeddings probe throws", async () => {
     process.env.RAG_PROVIDER = "sqlite";
-    process.env.RAG_DB_PATH = "data/test.sqlite";
     process.env.OLLAMA_URL = "http://localhost:11434";
     process.env.OLLAMA_EMBED_MODEL = "embed-model";
 
-    vi.doMock("../../rag/sqlite/db.ts", async () => {
-      const actual = await vi.importActual<typeof import("../../rag/sqlite/db.ts")>("../../rag/sqlite/db.ts");
-      return {
-        ...actual,
-        openSqliteDb: vi.fn(() => ({
-          exec: () => void 0,
-          prepare: () => ({ run: () => ({ changes: 0 }), all: () => [] }),
-          close: () => void 0,
-        })),
-      };
-    });
+    // DB probe uses src/server/db initDb; allow it to run against the temp DB.
 
     vi.doMock("../../embeddings/ollamaEmbeddings.ts", async () => {
       const actual = await vi.importActual<typeof import("../../embeddings/ollamaEmbeddings.ts")>("../../embeddings/ollamaEmbeddings.ts");
@@ -117,13 +95,13 @@ describe("RAG health HTTP API (TS)", () => {
 
   it("returns ok:false with sanitized db_unavailable when db probe fails", async () => {
     process.env.RAG_PROVIDER = "sqlite";
-    process.env.RAG_DB_PATH = "data/test.sqlite";
 
-    vi.doMock("../../rag/sqlite/db.ts", async () => {
-      const actual = await vi.importActual<typeof import("../../rag/sqlite/db.ts")>("../../rag/sqlite/db.ts");
+    // Force initDb to fail by mocking the src/server DB initializer.
+    vi.doMock("../../../src/server/db/index.ts", async () => {
+      const actual = await vi.importActual<typeof import("../../../src/server/db/index.ts")>("../../../src/server/db/index.ts");
       return {
         ...actual,
-        openSqliteDb: vi.fn(() => {
+        initDb: vi.fn(() => {
           throw new Error("Failed to load better-sqlite3 (native module)");
         }),
       };

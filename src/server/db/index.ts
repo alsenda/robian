@@ -4,12 +4,14 @@ import { createRequire } from "node:module";
 
 import type { Database } from "./types.ts";
 import { runMigrations } from "./migrate.ts";
+import { getRagDbPath } from "./ragDbPath.ts";
+import { debugRagDb, debugRagDbCounts } from "./ragDbDiag.ts";
 
 let _db: Database | null = null;
 let _initialized = false;
 
 function resolveDbPath(dbPath: string): string {
-  const p = String(dbPath || "").trim() || "data/rag.sqlite";
+  const p = String(dbPath || "").trim() || getRagDbPath();
   return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
 }
 
@@ -69,7 +71,8 @@ function tryLoadSqliteVecExtension(db: Database): void {
 export function initDb(opts?: { dbPath?: string }): void {
   if (_initialized) { return; }
 
-  const dbPath = opts?.dbPath ?? process.env.RAG_DB_PATH ?? "data/rag.sqlite";
+  const dbPath = resolveDbPath(opts?.dbPath ?? "");
+  debugRagDb("init", { dbPath });
   const db = _db ?? openDb(dbPath);
   _db = db;
 
@@ -80,11 +83,14 @@ export function initDb(opts?: { dbPath?: string }): void {
 
   runMigrations(db);
   _initialized = true;
+
+  debugRagDbCounts("initDb", db);
 }
 
 export function getDb(): Database {
   if (!_db) {
-    const dbPath = process.env.RAG_DB_PATH ?? "data/rag.sqlite";
+    const dbPath = resolveDbPath("");
+    debugRagDb("open", { dbPath });
     _db = openDb(dbPath);
   }
 

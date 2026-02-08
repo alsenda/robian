@@ -121,6 +121,7 @@ function createReqRes({ body }: { body?: unknown } = {}) {
 }
 
 describe("handleChat autonomous RAG (behavioral)", () => {
+  const uploadId = "00000000-0000-4000-8000-000000000001";
   const originalEnv = process.env;
   const originalFetch = globalThis.fetch;
 
@@ -145,13 +146,13 @@ describe("handleChat autonomous RAG (behavioral)", () => {
           {
             id: "u1:0",
             chunkId: "u1:0",
-            documentId: "u1",
+            documentId: uploadId,
             filename: "contract.txt",
             pageStart: 1,
             pageEnd: 1,
             score: 0.9,
             source: "upload",
-            sourceId: "u1",
+            sourceId: uploadId,
             excerpt: "Net 30.",
           },
         ],
@@ -180,7 +181,7 @@ describe("handleChat autonomous RAG (behavioral)", () => {
                         id: "call-1",
                         function: {
                           name: "rag_search_uploads",
-                          arguments: JSON.stringify({ query: "payment terms", topK: 5, sourceId: "u1" }),
+                          arguments: JSON.stringify({ query: "payment terms", topK: 5, sourceId: uploadId }),
                         },
                       },
                     ],
@@ -215,7 +216,7 @@ describe("handleChat autonomous RAG (behavioral)", () => {
     }) as any;
 
     const { req, res } = createReqRes({
-      body: { messages: [{ role: "user", content: "In upload u1, what are the payment terms?" }] },
+      body: { messages: [{ role: "user", content: `In upload ${uploadId}, what are the payment terms?` }] },
     });
 
     await handleChat(req, res);
@@ -225,7 +226,7 @@ describe("handleChat autonomous RAG (behavioral)", () => {
     expect(pipeSpy).toHaveBeenCalledTimes(1);
 
     expect(rag.query).toHaveBeenCalledTimes(1);
-    expect(rag.query).toHaveBeenCalledWith("payment terms", 5, { source: "upload", sourceId: "u1" });
+    expect(rag.query).toHaveBeenCalledWith("payment terms", 5, { source: "upload", sourceId: uploadId });
 
     const events = parseCapturedChunks();
     const firstToolCallIndex = events.findIndex((e) => e?.type === "tool_call");
@@ -279,6 +280,7 @@ describe("handleChat autonomous RAG (behavioral)", () => {
 });
 
 describe("handleChat RAG_AUTONUDGE", () => {
+  const uploadId = "00000000-0000-4000-8000-000000000001";
   const originalEnv = process.env;
   const originalFetch = globalThis.fetch;
 
@@ -297,18 +299,18 @@ describe("handleChat RAG_AUTONUDGE", () => {
       deleteDocuments: async () => ({ ok: true, deleted: 0 }),
       query: vi.fn(async () => ({
         ok: true,
-        query: "In upload u1, what are the payment terms?",
+        query: `In upload ${uploadId}, what are the payment terms?`,
         results: [
           {
             id: "u1:0",
             chunkId: "u1:0",
-            documentId: "u1",
+            documentId: uploadId,
             filename: "contract.txt",
             pageStart: 1,
             pageEnd: 1,
             score: 0.9,
             source: "upload",
-            sourceId: "u1",
+            sourceId: uploadId,
             excerpt: "Net 30.",
           },
         ],
@@ -363,7 +365,7 @@ describe("handleChat RAG_AUTONUDGE", () => {
     }) as any;
 
     const { req, res } = createReqRes({
-      body: { messages: [{ role: "user", content: "In upload u1, what are the payment terms?" }] },
+      body: { messages: [{ role: "user", content: `In upload ${uploadId}, what are the payment terms?` }] },
     });
 
     await handleChat(req, res);
@@ -372,7 +374,7 @@ describe("handleChat RAG_AUTONUDGE", () => {
     expect(res.statusCode).toBe(200);
     expect(call).toBe(2);
     expect(rag.query).toHaveBeenCalledTimes(1);
-    expect(rag.query).toHaveBeenCalledWith(expect.any(String), expect.any(Number), { source: "upload", sourceId: "u1" });
+    expect(rag.query).toHaveBeenCalledWith(expect.any(String), expect.any(Number), { source: "upload", sourceId: uploadId });
     expect(capturedSse).toMatch(/\[source:/i);
   });
 });

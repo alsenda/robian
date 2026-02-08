@@ -2,8 +2,7 @@ import type { RagService } from "./types.ts";
 import { createStubRagService } from "./ragService.stub.ts";
 
 import { createOllamaEmbeddingsService } from "../embeddings/ollamaEmbeddings.ts";
-import { openRagSqliteDb } from "./sqlite/db.ts";
-import { createSqliteRagService } from "./sqlite/ragService.sqlite.ts";
+import { createVectorStoreRagService } from "./vectorStoreRagService.ts";
 
 export interface RagServiceConfig {
   provider?: "stub" | "sqlite";
@@ -68,36 +67,19 @@ export function createRagService(config?: RagServiceConfig): RagService {
     return String(process.env.OLLAMA_EMBED_MODEL || "robian:latest").trim();
   }
 
-  function getDbPath(): string {
-    return String(process.env.RAG_DB_PATH || "").trim();
-  }
-
-  const ragConfig = {
-    chunkSizeChars: parseIntEnv("RAG_CHUNK_SIZE_CHARS", 1200),
-    overlapChars: parseIntEnv("RAG_CHUNK_OVERLAP_CHARS", 200),
-    maxDocChars: parseIntEnv("RAG_MAX_TEXT_CHARS_PER_DOC", 200_000),
-    maxQueryChars: parseIntEnv("RAG_MAX_QUERY_CHARS", 4000),
-    candidateLimit: parseIntEnv("RAG_CANDIDATE_LIMIT", 5000),
-    excerptChars: parseIntEnv("RAG_EXCERPT_CHARS", 240),
-  };
-
   switch (provider) {
     case "stub":
       return createStubRagService();
 
     case "sqlite": {
       try {
-        const db = openRagSqliteDb(getDbPath());
-        const embeddings = createOllamaEmbeddingsService({
-          ollamaUrl: getOllamaUrl(),
-          model: getEmbedModel(),
-        });
-
-        return createSqliteRagService({
-          db,
-          embeddings,
-          config: ragConfig,
-        });
+        // Runtime RAG is backed by the sqlite-vec vector store (documents/chunks/chunk_vectors)
+        // so it matches the ingest worker and /api/rag/ask.
+        // createOllamaEmbeddingsService is still used by /api/rag/health for embeddings probes.
+        void getOllamaUrl();
+        void getEmbedModel();
+        void createOllamaEmbeddingsService;
+        return createVectorStoreRagService();
       } catch (error: unknown) {
         // Best-effort: if sqlite fails, don't crash the server.
         if (process.env.NODE_ENV !== "test") {

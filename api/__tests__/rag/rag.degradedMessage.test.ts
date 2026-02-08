@@ -13,17 +13,16 @@ describe("RAG degraded messaging (TS)", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-    vi.unmock("../../rag/sqlite/db.ts");
+    vi.unmock("../../../src/server/db/index.ts");
   });
 
   it("returns sanitized db_unavailable message when sqlite init fails", async () => {
-    process.env.RAG_DB_PATH = "data/test.sqlite";
-
-    vi.doMock("../../rag/sqlite/db.ts", async () => {
-      const actual = await vi.importActual<typeof import("../../rag/sqlite/db.ts")>("../../rag/sqlite/db.ts");
+    // createRagService() is backed by src/server/db initDb().
+    vi.doMock("../../../src/server/db/index.ts", async () => {
+      const actual = await vi.importActual<typeof import("../../../src/server/db/index.ts")>("../../../src/server/db/index.ts");
       return {
         ...actual,
-        openRagSqliteDb: vi.fn(() => {
+        initDb: vi.fn(() => {
           throw new Error("Failed to load better-sqlite3: missing native bindings");
         }),
       };

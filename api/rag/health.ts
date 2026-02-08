@@ -3,7 +3,8 @@ import type express from "express";
 import { createOllamaEmbeddingsService } from "../embeddings/ollamaEmbeddings.ts";
 import type { EmbeddingsError } from "../embeddings/types.ts";
 
-import { openSqliteDb } from "./sqlite/db.ts";
+import { getRagDbPath } from "../../src/server/db/ragDbPath.ts";
+import { initDb } from "../../src/server/db/index.ts";
 
 export interface RagHealthResponse {
   ok: boolean;
@@ -53,7 +54,7 @@ function getProvider(): "stub" | "sqlite" {
 }
 
 function getDbPathConfigured(): string {
-  return String(process.env.RAG_DB_PATH || "").trim();
+  return getRagDbPath();
 }
 
 function getOllamaUrl(): string {
@@ -66,12 +67,9 @@ function getEmbedModel(): string {
 
 async function probeSqliteDb(dbPath: string): Promise<{ ok: true } | { ok: false; error: { kind: string; message: string } }> {
   try {
-    const db = openSqliteDb(dbPath);
-    try {
-      db.close();
-    } catch {
-      // ignore
-    }
+    // initDb opens the DB, loads sqlite-vec, and runs migrations.
+    process.env.RAG_DB_PATH = dbPath;
+    initDb({ dbPath });
     return { ok: true };
   } catch {
     return {

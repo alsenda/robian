@@ -7,6 +7,7 @@ import { createRagService } from "./rag/index.ts";
 import { createRagHealthHandler } from "./rag/health.ts";
 import { createRagIngestRouter } from "./rag/ingest.ts";
 import { createRagAskRouter } from "./rag/ask.ts";
+import { createRagDebugRouter } from "./rag/debug/wipe.ts";
 
 export function createApp(): express.Express {
   const app = express();
@@ -24,6 +25,9 @@ export function createApp(): express.Express {
 
   // RAG ask (retrieval + grounded answer)
   app.use("/api/rag/ask", createRagAskRouter());
+
+  // RAG debug utilities (guarded by env)
+  app.use("/api/rag/debug", createRagDebugRouter());
 
   // Chat endpoint (existing behavior)
   app.post("/api/chat", createHandleChat({ ragService }));

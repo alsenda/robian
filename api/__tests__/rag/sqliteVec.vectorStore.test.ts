@@ -1,17 +1,9 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb, initDb } from "../../../src/server/db/index.ts";
 import { EMBEDDING_DIM } from "../../../src/server/db/constants.ts";
 import { insertChunks, upsertChunkVectors, upsertDocument, vectorSearch } from "../../../src/server/rag/vectorStore.ts";
-
-function tempDbPath(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sqlite-vec-test-"));
-  return path.join(dir, "vec.sqlite");
-}
+import { wipeRagDb } from "../../../src/server/db/wipeRagDb.ts";
 
 function makeVector(hotIndex: number): number[] {
   const v = new Array<number>(EMBEDDING_DIM).fill(0);
@@ -20,15 +12,16 @@ function makeVector(hotIndex: number): number[] {
 }
 
 describe("sqlite-vec vectorStore", () => {
-  const dbPath = tempDbPath();
-  process.env.RAG_DB_PATH = dbPath;
-
   afterAll(() => {
     closeDb();
   });
 
-  it("returns nearest chunk by vector similarity", () => {
+  beforeEach(() => {
     initDb();
+    wipeRagDb(getDb());
+  });
+
+  it("returns nearest chunk by vector similarity", () => {
     const db = getDb();
 
     const doc = upsertDocument({

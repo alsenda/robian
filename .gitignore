@@ -12,6 +12,11 @@ dist/
 # Local app data (uploads, manifests, etc.)
 /.data/
 
+# SQLite databases (never commit)
+/data/*.sqlite
+/data/*.sqlite-wal
+/data/*.sqlite-shm
+
 # Editor directories
 .vscode/
 .idea/
