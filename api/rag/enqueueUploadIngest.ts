@@ -4,6 +4,7 @@ import { getManifestEntry } from "../uploads/db/manifest.ts";
 import { getUploadsRootDir, safeJoin } from "../uploads/storage/paths.ts";
 
 import { enqueueIngest } from "../../src/server/rag/ingest/queue.ts";
+import { upsertIngestStatus } from "../../src/server/rag/ingest/statusStore.ts";
 
 export interface EnqueueUploadIngestJobInput {
   userId: string;
@@ -18,13 +19,24 @@ export interface EnqueueUploadIngestJobInput {
  * This does not perform extraction itself; it just schedules the existing async ingest worker.
  */
 export function enqueueUploadIngestJob(input: EnqueueUploadIngestJobInput): string {
-  return enqueueIngest({
+  const jobId = enqueueIngest({
     userId: input.userId,
     documentId: input.documentId,
     filename: input.filename,
     ...(typeof input.mimeType === "string" ? { mimeType: input.mimeType } : {}),
     filePath: input.filePath,
   });
+
+  // Persist queued status for UI.
+  upsertIngestStatus({
+    documentId: input.documentId,
+    userId: input.userId,
+    status: "queued",
+    jobId,
+    lastError: null,
+  });
+
+  return jobId;
 }
 
 /**

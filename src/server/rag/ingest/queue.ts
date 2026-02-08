@@ -2,6 +2,7 @@ import fsp from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
 import { ingestDocument } from "./ingestDocument.ts";
+import { upsertIngestStatus } from "./statusStore.ts";
 
 export type IngestJobState = "queued" | "running" | "done" | "failed";
 
@@ -73,6 +74,18 @@ async function runWorker(): Promise<void> {
       job.state = "running";
       job.startedAt = Date.now();
 
+      try {
+        upsertIngestStatus({
+          documentId: job.documentId,
+          userId: job.userId,
+          status: "indexing",
+          ...(job.jobId ? { jobId: job.jobId } : {}),
+          lastError: null,
+        });
+      } catch {
+        // ignore status persistence errors
+      }
+
       debugRagPdf("job_started", {
         jobId: job.jobId,
         documentId: job.documentId,
@@ -114,6 +127,18 @@ async function runWorker(): Promise<void> {
         job.state = "failed";
         job.error = toOneLine(error instanceof Error ? error.message : String(error ?? "unknown error"));
         job.finishedAt = Date.now();
+
+        try {
+          upsertIngestStatus({
+            documentId: job.documentId,
+            userId: job.userId,
+            status: "failed",
+            ...(job.jobId ? { jobId: job.jobId } : {}),
+            lastError: job.error,
+          });
+        } catch {
+          // ignore
+        }
 
         debugRagPdf("job_failed", {
           jobId: job.jobId,
