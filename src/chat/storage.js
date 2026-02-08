@@ -1,8 +1,9 @@
-export const STORAGE_KEY = 'theapp.chat.messages.v1'
+export const STORAGE_KEY = 'robian.chat.messages.v1'
+const LEGACY_STORAGE_KEY = 'theapp.chat.messages.v1'
 
 export function loadInitialMessages() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -45,6 +46,7 @@ export function persistMessages(messages) {
 export function clearPersistedMessages() {
   try {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
   } catch {
     // ignore
   }

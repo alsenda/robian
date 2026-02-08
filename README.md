@@ -1,6 +1,6 @@
-# AI Chat App
+# Robian
 
-A lightweight AI chat application built with Preact and TanStack AI.
+A lightweight local Ollama chat app (Robian) built with Preact and TanStack AI.
 
 ## Features
 
