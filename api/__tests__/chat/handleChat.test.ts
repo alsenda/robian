@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-let pipeSpy
+let pipeSpy: ReturnType<typeof vi.fn>
 
-function createSseStream(dataEvents) {
+function createSseStream(dataEvents: string[]) {
   const encoder = new TextEncoder()
   return new ReadableStream({
     start(controller) {
@@ -16,10 +16,10 @@ function createSseStream(dataEvents) {
 }
 
 vi.mock('@tanstack/ai', async (importOriginal) => {
-  const actual = await importOriginal()
+  const actual = await importOriginal<any>()
   return {
     ...actual,
-    convertMessagesToModelMessages: vi.fn((messages) => messages),
+    convertMessagesToModelMessages: vi.fn((messages: unknown) => messages),
   }
 })
 
@@ -27,7 +27,7 @@ vi.mock('node:stream', () => {
   pipeSpy = vi.fn()
   return {
     Readable: {
-      fromWeb: vi.fn((webStream) => {
+      fromWeb: vi.fn((webStream: any) => {
         // Consume the web stream so the async generator runs.
         if (webStream && typeof webStream.getReader === 'function') {
           const reader = webStream.getReader()
@@ -58,28 +58,28 @@ vi.mock('node:stream', () => {
   }
 })
 
-const { handleChat } = await import('../../chat/index.js')
+const { handleChat } = await import('../../chat/index.ts')
 
-function createReqRes({ body } = {}) {
-  const req = new EventEmitter()
+function createReqRes({ body }: { body?: unknown } = {}) {
+  const req = new EventEmitter() as any
   req.body = body
 
-  const headers = new Map()
-  const res = new EventEmitter()
+  const headers = new Map<string, unknown>()
+  const res = new EventEmitter() as any
   Object.assign(res, {
-    statusCode: undefined,
-    status(code) {
+    statusCode: undefined as number | undefined,
+    status(code: number) {
       this.statusCode = code
       return this
     },
-    setHeader(key, value) {
+    setHeader(key: string, value: unknown) {
       headers.set(key, value)
     },
     flushHeaders: vi.fn(),
     write: vi.fn(),
     end: vi.fn(),
-    jsonPayload: undefined,
-    json(payload) {
+    jsonPayload: undefined as unknown,
+    json(payload: unknown) {
       this.jsonPayload = payload
       return this
     },
@@ -88,7 +88,7 @@ function createReqRes({ body } = {}) {
   return { req, res, headers }
 }
 
-describe('handleChat', () => {
+describe('handleChat (TS)', () => {
   const originalEnv = process.env
   const originalFetch = globalThis.fetch
 
@@ -105,17 +105,11 @@ describe('handleChat', () => {
         status: 200,
         statusText: 'OK',
         body: createSseStream([
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: 'hi' } }],
-          }),
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
-          }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'hi' } }] }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: '!' }, finish_reason: 'stop' }] }),
           '[DONE]',
         ]),
-      }
+      } as any
     })
   })
 
@@ -130,21 +124,19 @@ describe('handleChat', () => {
     await handleChat(req, res)
 
     expect(res.statusCode).toBe(400)
-    expect(res.jsonPayload).toEqual({
-      error: 'Missing "messages" array in request body',
-    })
+    expect(res.jsonPayload).toEqual({ error: 'Missing "messages" array in request body' })
   })
 
   it('returns 502 when Ollama is unreachable', async () => {
     globalThis.fetch = vi.fn(async () => {
       throw new Error('connect ECONNREFUSED')
-    })
+    }) as any
 
     const { req, res } = createReqRes({ body: { messages: [] } })
     await handleChat(req, res)
 
     expect(res.statusCode).toBe(502)
-    expect(res.jsonPayload?.error).toContain('Could not reach Ollama')
+    expect(String((res.jsonPayload as any)?.error || '')).toContain('Could not reach Ollama')
   })
 
   it('streams SSE and aborts on close', async () => {
@@ -161,7 +153,6 @@ describe('handleChat', () => {
     expect(headers.get('Content-Type')).toBe('text/event-stream')
     expect(pipeSpy).toHaveBeenCalledTimes(1)
 
-    // Closing the SSE response should not throw
     res.emit('close')
   })
 })

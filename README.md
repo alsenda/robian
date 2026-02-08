@@ -87,7 +87,7 @@ The API server can also serve the built frontend (including Tailwind CSS).
 
 ```bash
 npm run build
-NODE_ENV=production node server.js
+NODE_ENV=production npm run dev:server
 ```
 
 Then open `http://localhost:3001`.

@@ -7,6 +7,9 @@ export function ChatMessages({ messages, isLoading, error, messagesViewportRef, 
       className="brutal-scroll relative z-0 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-sky-100 px-5 py-5"
       ref={messagesViewportRef}
     >
+      <div className="border-4 border-black bg-white px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-black shadow-brutal-sm">
+        You can reference uploaded files by id, e.g. “summarize upload &lt;id&gt;”.
+      </div>
       {error && (
         <div className="relative flex max-w-[86%] flex-col gap-2 border-4 border-black bg-orange-200 px-4 py-3 text-black shadow-brutal-sm">
           <div className="text-[11px] font-black uppercase tracking-widest">Error</div>

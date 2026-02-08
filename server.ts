@@ -1,7 +1,9 @@
 import 'dotenv/config'
-import { createApp } from './api/app.js'
+import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { createApp } from './api/app.ts'
 
 const app = createApp()
 const port = 3001
@@ -14,7 +16,7 @@ const __dirname = path.dirname(__filename)
 if (process.env.NODE_ENV === 'production') {
   const distDir = path.join(__dirname, 'dist')
   app.use(express.static(distDir))
-  app.get('*', (req, res) => {
+  app.get('*', (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'))
   })
 }

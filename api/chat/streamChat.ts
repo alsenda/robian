@@ -1,14 +1,11 @@
 import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
 import { streamOllamaChatCompletionsOnce } from './ollama/client.js'
 import { createChatCompletionsStreamParser } from './ollama/streamParser.js'
-import {
-  dateTodayTool,
-  fetchUrlTool,
-  getUploadTool,
-  listUploadsTool,
-  ragSearchUploadsTool,
-  searchWebTool,
-} from './tools/index.js'
+
+export type ServerTool = {
+  name: string
+  execute: (input: unknown) => Promise<unknown>
+}
 
 export async function* streamChatWithTools({
   ollamaUrl,
@@ -17,17 +14,18 @@ export async function* streamChatWithTools({
   chatCompletionsMessages,
   firstResponse,
   tools,
+  serverTools,
   abortSignal,
-}) {
-  const serverTools = [
-    fetchUrlTool,
-    searchWebTool,
-    dateTodayTool,
-    listUploadsTool,
-    getUploadTool,
-    ragSearchUploadsTool,
-  ]
-
+}: {
+  ollamaUrl: string
+  model: string
+  requestId: string
+  chatCompletionsMessages: unknown[]
+  firstResponse: Response | null | undefined
+  tools: unknown
+  serverTools: ServerTool[]
+  abortSignal?: AbortSignal
+}): AsyncGenerator<unknown, void, void> {
   const prefixMessages = getPromptPrefixMessagesForModel(model)
   const conversation = [...prefixMessages, ...chatCompletionsMessages]
 
@@ -45,17 +43,18 @@ export async function* streamChatWithTools({
           requestId,
           abortSignal,
         })
-      } catch (error) {
+      } catch (error: unknown) {
         if (abortSignal?.aborted) return
+        const message = error instanceof Error ? error.message : 'unknown error'
         if (process.env.NODE_ENV !== 'test') {
-          console.error(`[chat] ollama unreachable: ${error?.message || 'unknown error'}`)
+          console.error(`[chat] ollama unreachable: ${message}`)
         }
         yield {
           type: 'error',
           id: requestId,
           model,
           timestamp: Date.now(),
-          error: { message: error?.message || 'Could not reach Ollama' },
+          error: { message: message || 'Could not reach Ollama' },
         }
         return
       }
@@ -69,9 +68,7 @@ export async function* streamChatWithTools({
           id: requestId,
           model,
           timestamp: Date.now(),
-          error: {
-            message: `Ollama error: ${response.status} ${response.statusText}`,
-          },
+          error: { message: `Ollama error: ${response.status} ${response.statusText}` },
         }
         return
       }
@@ -89,17 +86,18 @@ export async function* streamChatWithTools({
       for await (const chunk of parse({ response })) {
         yield chunk
       }
-    } catch (error) {
+    } catch (error: unknown) {
       if (abortSignal?.aborted) return
+      const message = error instanceof Error ? error.message : 'unknown error'
       if (process.env.NODE_ENV !== 'test') {
-        console.error(`[chat] stream parse error: ${error?.message || 'unknown error'}`)
+        console.error(`[chat] stream parse error: ${message}`)
       }
       yield {
         type: 'error',
         id: requestId,
         model,
         timestamp: Date.now(),
-        error: { message: error?.message || 'Stream parse error' },
+        error: { message: message || 'Stream parse error' },
       }
       return
     }
@@ -107,7 +105,7 @@ export async function* streamChatWithTools({
     const toolCalls = [...state.toolCallsByIndex.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([, value]) => value)
-      .filter((c) => c && c.name)
+      .filter((c: any) => c && c.name)
 
     if (!toolCalls.length) {
       yield {
@@ -123,7 +121,7 @@ export async function* streamChatWithTools({
     conversation.push({
       role: 'assistant',
       content: state.fullContent || null,
-      tool_calls: toolCalls.map((c) => ({
+      tool_calls: toolCalls.map((c: any) => ({
         id: c.id,
         type: 'function',
         function: {
@@ -133,7 +131,7 @@ export async function* streamChatWithTools({
       })),
     })
 
-    for (const toolCall of toolCalls) {
+    for (const toolCall of toolCalls as any[]) {
       if (process.env.NODE_ENV !== 'test') {
         console.log(`[chat] tool: ${toolCall.name}`)
       }
@@ -141,62 +139,31 @@ export async function* streamChatWithTools({
       const tool = serverTools.find((t) => t.name === toolCall.name)
       if (!tool) {
         const errorText = `Unknown tool: ${toolCall.name}`
-        yield {
-          type: 'tool-result',
-          toolCallId: toolCall.id,
-          content: errorText,
-        }
-        conversation.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: errorText,
-        })
+        yield { type: 'tool-result', toolCallId: toolCall.id, content: errorText }
+        conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: errorText })
         continue
       }
 
-      let parsedArgs
+      let parsedArgs: unknown
       try {
         parsedArgs = toolCall.arguments ? JSON.parse(toolCall.arguments) : {}
-      } catch (error) {
-        const errorText = `Invalid tool arguments: ${error?.message || 'parse error'}`
-        yield {
-          type: 'tool-result',
-          toolCallId: toolCall.id,
-          content: errorText,
-        }
-        conversation.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: errorText,
-        })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'parse error'
+        const errorText = `Invalid tool arguments: ${message}`
+        yield { type: 'tool-result', toolCallId: toolCall.id, content: errorText }
+        conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: errorText })
         continue
       }
 
       try {
         const output = await tool.execute(parsedArgs)
         const content = typeof output === 'string' ? output : JSON.stringify(output)
-        yield {
-          type: 'tool-result',
-          toolCallId: toolCall.id,
-          content,
-        }
-        conversation.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content,
-        })
-      } catch (error) {
-        const errorText = error?.message || 'Tool execution failed'
-        yield {
-          type: 'tool-result',
-          toolCallId: toolCall.id,
-          content: errorText,
-        }
-        conversation.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: errorText,
-        })
+        yield { type: 'tool-result', toolCallId: toolCall.id, content }
+        conversation.push({ role: 'tool', tool_call_id: toolCall.id, content })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Tool execution failed'
+        yield { type: 'tool-result', toolCallId: toolCall.id, content: message }
+        conversation.push({ role: 'tool', tool_call_id: toolCall.id, content: message })
       }
     }
   }

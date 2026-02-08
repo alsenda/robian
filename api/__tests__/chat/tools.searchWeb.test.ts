@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-let pipeSpy
+let pipeSpy: ReturnType<typeof vi.fn>
 
-function createSseStream(dataEvents) {
+function createSseStream(dataEvents: string[]) {
   const encoder = new TextEncoder()
   return new ReadableStream({
     start(controller) {
@@ -15,7 +15,7 @@ function createSseStream(dataEvents) {
   })
 }
 
-async function waitFor(conditionFn, { maxAttempts = 50, delayMs = 5 } = {}) {
+async function waitFor(conditionFn: () => boolean, { maxAttempts = 50, delayMs = 5 } = {}) {
   for (let i = 0; i < maxAttempts; i++) {
     if (conditionFn()) return
     // eslint-disable-next-line no-await-in-loop
@@ -24,10 +24,10 @@ async function waitFor(conditionFn, { maxAttempts = 50, delayMs = 5 } = {}) {
 }
 
 vi.mock('@tanstack/ai', async (importOriginal) => {
-  const actual = await importOriginal()
+  const actual = await importOriginal<any>()
   return {
     ...actual,
-    convertMessagesToModelMessages: vi.fn((messages) => messages),
+    convertMessagesToModelMessages: vi.fn((messages: unknown) => messages),
   }
 })
 
@@ -35,8 +35,7 @@ vi.mock('node:stream', () => {
   pipeSpy = vi.fn()
   return {
     Readable: {
-      fromWeb: vi.fn((webStream) => {
-        // Consume the web stream so the async generator runs.
+      fromWeb: vi.fn((webStream: any) => {
         if (webStream && typeof webStream.getReader === 'function') {
           const reader = webStream.getReader()
           ;(async () => {
@@ -66,28 +65,28 @@ vi.mock('node:stream', () => {
   }
 })
 
-const { handleChat } = await import('../../chat/index.js')
+const { handleChat } = await import('../../chat/index.ts')
 
-function createReqRes({ body } = {}) {
-  const req = new EventEmitter()
+function createReqRes({ body }: { body?: unknown } = {}) {
+  const req = new EventEmitter() as any
   req.body = body
 
-  const headers = new Map()
-  const res = new EventEmitter()
+  const headers = new Map<string, unknown>()
+  const res = new EventEmitter() as any
   Object.assign(res, {
-    statusCode: undefined,
-    status(code) {
+    statusCode: undefined as number | undefined,
+    status(code: number) {
       this.statusCode = code
       return this
     },
-    setHeader(key, value) {
+    setHeader(key: string, value: unknown) {
       headers.set(key, value)
     },
     flushHeaders: vi.fn(),
     write: vi.fn(),
     end: vi.fn(),
-    jsonPayload: undefined,
-    json(payload) {
+    jsonPayload: undefined as unknown,
+    json(payload: unknown) {
       this.jsonPayload = payload
       return this
     },
@@ -96,7 +95,7 @@ function createReqRes({ body } = {}) {
   return { req, res, headers }
 }
 
-describe('fetch_url tool integration', () => {
+describe('search_web tool integration (TS)', () => {
   const originalEnv = process.env
   const originalFetch = globalThis.fetch
 
@@ -107,6 +106,8 @@ describe('fetch_url tool integration', () => {
     process.env = { ...originalEnv }
     delete process.env.OLLAMA_URL
     delete process.env.OLLAMA_MODEL
+    delete process.env.WEB_SEARCH_PROVIDER
+    delete process.env.BRAVE_SEARCH_API_KEY
 
     globalThis.fetch = vi.fn(async () => {
       return {
@@ -114,17 +115,11 @@ describe('fetch_url tool integration', () => {
         status: 200,
         statusText: 'OK',
         body: createSseStream([
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: 'hi' } }],
-          }),
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
-          }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'hi' } }] }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: '!' }, finish_reason: 'stop' }] }),
           '[DONE]',
         ]),
-      }
+      } as any
     })
   })
 
@@ -133,100 +128,16 @@ describe('fetch_url tool integration', () => {
     globalThis.fetch = originalFetch
   })
 
-  it('executes fetch_url tool calls and continues', async () => {
+  it('executes search_web tool calls and continues', async () => {
     const completionUrl = defaultCompletionUrl
-    const webUrl = 'https://93.184.216.34/'
 
-    let completionCall = 0
-    globalThis.fetch = vi.fn(async (url, init) => {
-      if (String(url) === completionUrl) {
-        completionCall += 1
-        if (completionCall === 1) {
-          return {
-            ok: true,
-            status: 200,
-            statusText: 'OK',
-            body: createSseStream([
-              JSON.stringify({
-                model: defaultModel,
-                choices: [
-                  {
-                    delta: {
-                      tool_calls: [
-                        {
-                          index: 0,
-                          id: 'call_1',
-                          function: {
-                            name: 'fetch_url',
-                            arguments: JSON.stringify({ url: webUrl, maxChars: 600 }),
-                          },
-                        },
-                      ],
-                    },
-                    finish_reason: 'tool_calls',
-                  },
-                ],
-              }),
-              '[DONE]',
-            ]),
-          }
-        }
-
-        return {
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          body: createSseStream([
-            JSON.stringify({
-              model: defaultModel,
-              choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
-            }),
-            '[DONE]',
-          ]),
-        }
-      }
-
-      if (String(url) === webUrl) {
-        return {
-          status: 200,
-          headers: new Map([['content-type', 'text/html']]),
-          body: new ReadableStream({
-            start(controller) {
-              controller.enqueue(
-                new TextEncoder().encode('<html><body><h1>Hi</h1><p>World</p></body></html>'),
-              )
-              controller.close()
-            },
-          }),
-        }
-      }
-
-      throw new Error(`Unexpected fetch url: ${url}`)
-    })
-
-    const { req, res } = createReqRes({
-      body: { messages: [{ role: 'user', content: 'fetch that url' }] },
-    })
-
-    await handleChat(req, res)
-
-    // Stream processing happens asynchronously; give it a moment to finish.
-    await waitFor(() => completionCall >= 2)
-
-    expect(res.statusCode).toBe(200)
-    expect(completionCall).toBe(2)
-    expect(globalThis.fetch).toHaveBeenCalledWith(webUrl, expect.any(Object))
-  })
-
-  it('returns structured fetch_url soft-failure and continues', async () => {
-    const completionUrl = defaultCompletionUrl
-    const blockedUrl = 'https://example.com/blocked'
-
-    const completionBodies = []
+    const completionBodies: any[] = []
     let completionCall = 0
 
     globalThis.fetch = vi.fn(async (url, init) => {
-      if (String(url) === completionUrl) {
+      const urlText = String(url)
+
+      if (urlText === completionUrl) {
         completionCall += 1
 
         if (init?.body) {
@@ -253,8 +164,8 @@ describe('fetch_url tool integration', () => {
                           index: 0,
                           id: 'call_1',
                           function: {
-                            name: 'fetch_url',
-                            arguments: JSON.stringify({ url: blockedUrl, maxChars: 600 }),
+                            name: 'search_web',
+                            arguments: JSON.stringify({ query: 'hello', count: 3 }),
                           },
                         },
                       ],
@@ -265,7 +176,7 @@ describe('fetch_url tool integration', () => {
               }),
               '[DONE]',
             ]),
-          }
+          } as any
         }
 
         return {
@@ -273,48 +184,157 @@ describe('fetch_url tool integration', () => {
           status: 200,
           statusText: 'OK',
           body: createSseStream([
-            JSON.stringify({
-              model: defaultModel,
-              choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
-            }),
+            JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] }),
             '[DONE]',
           ]),
-        }
+        } as any
       }
 
-      if (String(url) === blockedUrl) {
+      if (urlText.startsWith('https://api.search.brave.com/res/v1/web/search')) {
+        throw new Error('Unexpected Brave call (default provider should be DuckDuckGo)')
+      }
+
+      if (urlText.startsWith('https://html.duckduckgo.com/html/')) {
+        const html = `
+          <div class="results">
+            <div class="result">
+              <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage%23frag">Example</a>
+              <div class="result__snippet">Snippet</div>
+            </div>
+            <div class="result">
+              <a class="result__a" href="https://example.com/file.pdf">PDF</a>
+              <div class="result__snippet">Should be filtered</div>
+            </div>
+          </div>
+        `
         return {
-          status: 403,
-          statusText: 'Forbidden',
-          headers: new Map([['content-type', 'text/html']]),
-          body: new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('<html><body>blocked</body></html>'))
-              controller.close()
-            },
-          }),
-        }
+          ok: true,
+          status: 200,
+          text: async () => html,
+        } as any
       }
 
-      throw new Error(`Unexpected fetch url: ${url}`)
-    })
+      throw new Error(`Unexpected fetch url: ${String(url)}`)
+    }) as any
 
     const { req, res } = createReqRes({
-      body: { messages: [{ role: 'user', content: 'fetch that url' }] },
+      body: { messages: [{ role: 'user', content: 'search the web' }] },
     })
 
     await handleChat(req, res)
-
-    // Give stream processing a moment to finish.
     await waitFor(() => completionCall >= 2)
 
     expect(res.statusCode).toBe(200)
     expect(completionCall).toBe(2)
 
     const second = completionBodies.at(1)
-    const toolMsg = second?.messages?.find?.((m) => m?.role === 'tool')
+    const toolMsg = second?.messages?.find?.((m: any) => m?.role === 'tool')
     expect(typeof toolMsg?.content).toBe('string')
-    expect(toolMsg.content).toContain('"ok":false')
-    expect(toolMsg.content).toContain('"status":403')
+    expect(toolMsg.content).toContain('"query":"hello"')
+    expect(toolMsg.content).toContain('https://example.com/page')
+  })
+
+  it('can switch provider to brave via WEB_SEARCH_PROVIDER', async () => {
+    process.env.WEB_SEARCH_PROVIDER = 'brave'
+    process.env.BRAVE_SEARCH_API_KEY = 'test_key'
+
+    const completionUrl = defaultCompletionUrl
+
+    const completionBodies: any[] = []
+    let completionCall = 0
+
+    globalThis.fetch = vi.fn(async (url, init) => {
+      const urlText = String(url)
+
+      if (urlText === completionUrl) {
+        completionCall += 1
+
+        if (init?.body) {
+          try {
+            completionBodies.push(JSON.parse(String(init.body)))
+          } catch {
+            // ignore
+          }
+        }
+
+        if (completionCall === 1) {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            body: createSseStream([
+              JSON.stringify({
+                model: defaultModel,
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: 'call_1',
+                          function: {
+                            name: 'search_web',
+                            arguments: JSON.stringify({ query: 'hello', count: 3 }),
+                          },
+                        },
+                      ],
+                    },
+                    finish_reason: 'tool_calls',
+                  },
+                ],
+              }),
+              '[DONE]',
+            ]),
+          } as any
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          body: createSseStream([
+            JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] }),
+            '[DONE]',
+          ]),
+        } as any
+      }
+
+      if (urlText.startsWith('https://api.search.brave.com/res/v1/web/search')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            web: {
+              results: [
+                { title: 'Example', url: 'https://example.com/page#frag', description: 'Snippet' },
+                { title: 'PDF', url: 'https://example.com/file.pdf', description: 'Should be filtered' },
+              ],
+            },
+          }),
+        } as any
+      }
+
+      if (urlText.startsWith('https://html.duckduckgo.com/html/')) {
+        throw new Error('Unexpected DuckDuckGo call when provider is brave')
+      }
+
+      throw new Error(`Unexpected fetch url: ${String(url)}`)
+    }) as any
+
+    const { req, res } = createReqRes({
+      body: { messages: [{ role: 'user', content: 'search the web' }] },
+    })
+
+    await handleChat(req, res)
+    await waitFor(() => completionCall >= 2)
+
+    expect(res.statusCode).toBe(200)
+    expect(completionCall).toBe(2)
+
+    const second = completionBodies.at(1)
+    const toolMsg = second?.messages?.find?.((m: any) => m?.role === 'tool')
+    expect(typeof toolMsg?.content).toBe('string')
+    expect(toolMsg.content).toContain('"query":"hello"')
+    expect(toolMsg.content).toContain('https://example.com/page')
   })
 })

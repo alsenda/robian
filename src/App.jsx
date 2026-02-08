@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChatHeader } from './chat/components/ChatHeader.jsx'
 import { ChatInput } from './chat/components/ChatInput.jsx'
 import { ChatMessages } from './chat/components/ChatMessages.jsx'
+import { UploadsPage } from './uploads/UploadsPage.jsx'
 import {
   clearPersistedMessages,
   loadInitialMessages,
@@ -14,6 +15,7 @@ import { useAutoScroll } from './chat/useAutoScroll.js'
 
 function App() {
   const [initialMessages] = useState(loadInitialMessages)
+  const [view, setView] = useState('chat')
 
   const connection = useMemo(
     () => fetchServerSentEvents('/api/chat'),
@@ -118,23 +120,29 @@ function App() {
         aria-label="AI chat"
       >
         <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden border-4 border-black bg-white shadow-brutal">
-          <ChatHeader onRestart={onRestart} />
+          <ChatHeader onRestart={onRestart} view={view} onNavigate={setView} />
 
-          <ChatMessages
-            messages={messages}
-            isLoading={isLoading}
-            error={error}
-            messagesViewportRef={messagesViewportRef}
-            bottomRef={bottomRef}
-          />
+          {view === 'uploads' ? (
+            <UploadsPage />
+          ) : (
+            <>
+              <ChatMessages
+                messages={messages}
+                isLoading={isLoading}
+                error={error}
+                messagesViewportRef={messagesViewportRef}
+                bottomRef={bottomRef}
+              />
 
-          <ChatInput
-            inputRef={inputRef}
-            input={input}
-            setInput={setInput}
-            onSubmit={onSubmit}
-            isLoading={isLoading}
-          />
+              <ChatInput
+                inputRef={inputRef}
+                input={input}
+                setInput={setInput}
+                onSubmit={onSubmit}
+                isLoading={isLoading}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>

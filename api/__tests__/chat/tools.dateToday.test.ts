@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-let pipeSpy
+let pipeSpy: ReturnType<typeof vi.fn>
 
-function createSseStream(dataEvents) {
+function createSseStream(dataEvents: string[]) {
   const encoder = new TextEncoder()
   return new ReadableStream({
     start(controller) {
@@ -15,7 +15,7 @@ function createSseStream(dataEvents) {
   })
 }
 
-async function waitFor(conditionFn, { maxAttempts = 50, delayMs = 5 } = {}) {
+async function waitFor(conditionFn: () => boolean, { maxAttempts = 50, delayMs = 5 } = {}) {
   for (let i = 0; i < maxAttempts; i++) {
     if (conditionFn()) return
     // eslint-disable-next-line no-await-in-loop
@@ -24,10 +24,10 @@ async function waitFor(conditionFn, { maxAttempts = 50, delayMs = 5 } = {}) {
 }
 
 vi.mock('@tanstack/ai', async (importOriginal) => {
-  const actual = await importOriginal()
+  const actual = await importOriginal<any>()
   return {
     ...actual,
-    convertMessagesToModelMessages: vi.fn((messages) => messages),
+    convertMessagesToModelMessages: vi.fn((messages: unknown) => messages),
   }
 })
 
@@ -35,8 +35,7 @@ vi.mock('node:stream', () => {
   pipeSpy = vi.fn()
   return {
     Readable: {
-      fromWeb: vi.fn((webStream) => {
-        // Consume the web stream so the async generator runs.
+      fromWeb: vi.fn((webStream: any) => {
         if (webStream && typeof webStream.getReader === 'function') {
           const reader = webStream.getReader()
           ;(async () => {
@@ -66,28 +65,28 @@ vi.mock('node:stream', () => {
   }
 })
 
-const { handleChat } = await import('../../chat/index.js')
+const { handleChat } = await import('../../chat/index.ts')
 
-function createReqRes({ body } = {}) {
-  const req = new EventEmitter()
+function createReqRes({ body }: { body?: unknown } = {}) {
+  const req = new EventEmitter() as any
   req.body = body
 
-  const headers = new Map()
-  const res = new EventEmitter()
+  const headers = new Map<string, unknown>()
+  const res = new EventEmitter() as any
   Object.assign(res, {
-    statusCode: undefined,
-    status(code) {
+    statusCode: undefined as number | undefined,
+    status(code: number) {
       this.statusCode = code
       return this
     },
-    setHeader(key, value) {
+    setHeader(key: string, value: unknown) {
       headers.set(key, value)
     },
     flushHeaders: vi.fn(),
     write: vi.fn(),
     end: vi.fn(),
-    jsonPayload: undefined,
-    json(payload) {
+    jsonPayload: undefined as unknown,
+    json(payload: unknown) {
       this.jsonPayload = payload
       return this
     },
@@ -96,7 +95,7 @@ function createReqRes({ body } = {}) {
   return { req, res, headers }
 }
 
-describe('date_today tool integration', () => {
+describe('date_today tool integration (TS)', () => {
   const originalEnv = process.env
   const originalFetch = globalThis.fetch
 
@@ -114,19 +113,12 @@ describe('date_today tool integration', () => {
         status: 200,
         statusText: 'OK',
         body: createSseStream([
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: 'hi' } }],
-          }),
-          JSON.stringify({
-            model: defaultModel,
-            choices: [{ delta: { content: '!' }, finish_reason: 'stop' }],
-          }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'hi' } }] }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: '!' }, finish_reason: 'stop' }] }),
           '[DONE]',
         ]),
-      }
+      } as any
     })
-
   })
 
   afterEach(() => {
@@ -135,7 +127,7 @@ describe('date_today tool integration', () => {
   })
 
   it('executes date_today even when tool call uses parameters object', async () => {
-    const completionBodies = []
+    const completionBodies: any[] = []
     let completionCall = 0
 
     globalThis.fetch = vi.fn(async (url, init) => {
@@ -160,14 +152,7 @@ describe('date_today tool integration', () => {
                 choices: [
                   {
                     delta: {
-                      tool_calls: [
-                        {
-                          index: 0,
-                          id: 'call_1',
-                          name: 'date_today',
-                          parameters: {},
-                        },
-                      ],
+                      tool_calls: [{ index: 0, id: 'call_1', name: 'date_today', parameters: {} }],
                     },
                     finish_reason: 'tool_calls',
                   },
@@ -175,7 +160,7 @@ describe('date_today tool integration', () => {
               }),
               '[DONE]',
             ]),
-          }
+          } as any
         }
 
         return {
@@ -183,17 +168,14 @@ describe('date_today tool integration', () => {
           status: 200,
           statusText: 'OK',
           body: createSseStream([
-            JSON.stringify({
-              model: defaultModel,
-              choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
-            }),
+            JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] }),
             '[DONE]',
           ]),
-        }
+        } as any
       }
 
-      throw new Error(`Unexpected fetch url: ${url}`)
-    })
+      throw new Error(`Unexpected fetch url: ${String(url)}`)
+    }) as any
 
     const { req, res } = createReqRes({
       body: { messages: [{ role: 'user', content: "what's today's date?" }] },
@@ -207,9 +189,8 @@ describe('date_today tool integration', () => {
     expect(completionCall).toBe(2)
 
     const second = completionBodies.at(1)
-    const toolMsg = second?.messages?.find?.((m) => m?.role === 'tool')
+    const toolMsg = second?.messages?.find?.((m: any) => m?.role === 'tool')
     expect(typeof toolMsg?.content).toBe('string')
-    // Tool content should be an en-US locale date string.
     expect(toolMsg.content).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
   })
 })

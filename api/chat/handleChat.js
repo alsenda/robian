@@ -10,6 +10,9 @@ import { toChatCompletionsMessages } from './utils/messages.js'
 import {
   dateTodayDef,
   fetchUrlDef,
+  getUploadDef,
+  listUploadsDef,
+  ragSearchUploadsDef,
   searchWebDef,
   toChatCompletionsTools,
 } from './tools/index.js'
@@ -54,7 +57,14 @@ export async function handleChat(req, res) {
     const modelMessages = convertMessagesToModelMessages(messages)
     const chatCompletionsMessages = toChatCompletionsMessages(modelMessages)
 
-    const tools = toChatCompletionsTools([searchWebDef, fetchUrlDef, dateTodayDef])
+    const tools = toChatCompletionsTools([
+      searchWebDef,
+      fetchUrlDef,
+      dateTodayDef,
+      listUploadsDef,
+      getUploadDef,
+      ragSearchUploadsDef,
+    ])
 
     const prefixMessages = getPromptPrefixMessagesForModel(model)
     const firstConversation = [...prefixMessages, ...chatCompletionsMessages]
