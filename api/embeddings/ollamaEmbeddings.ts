@@ -88,7 +88,7 @@ export function createOllamaEmbeddingsService({
         if (!Array.isArray(embeddings)) {
           throw {
             kind: 'unsupported_model',
-            message: `Ollama embed response for model "${configuredModel}" did not include embeddings`,
+            message: `Embeddings failed for model "${configuredModel}". Verify OLLAMA_EMBED_MODEL supports /api/embed and that Ollama is up to date.`,
           } satisfies EmbeddingsError
         }
 
@@ -96,7 +96,7 @@ export function createOllamaEmbeddingsService({
         if (!Array.isArray(first) || !isNonEmptyNumberArray(first)) {
           throw {
             kind: 'unsupported_model',
-            message: `Invalid embeddings payload for model "${configuredModel}"`,
+            message: `Embeddings failed for model "${configuredModel}". Verify OLLAMA_EMBED_MODEL supports /api/embed and returns numeric vectors.`,
           } satisfies EmbeddingsError
         }
 

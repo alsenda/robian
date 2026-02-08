@@ -10,6 +10,7 @@ import type {
 
 
 export function createStubRagService(): RagService {
+  const message = 'RAG is stubbed. Set RAG_PROVIDER=sqlite.'
   return {
     async upsertDocuments(_docs: RagDocumentInput[]): Promise<RagUpsertResult> {
       return {
@@ -17,8 +18,7 @@ export function createStubRagService(): RagService {
         upserted: 0,
         error: {
           kind: 'not_implemented',
-          message:
-            'RAG is not implemented yet. Developers must wire embeddings/vector index.',
+          message,
         },
       }
     },
@@ -29,8 +29,7 @@ export function createStubRagService(): RagService {
         deleted: 0,
         error: {
           kind: 'not_implemented',
-          message:
-            'RAG is not implemented yet. Developers must wire embeddings/vector index.',
+          message,
         },
       }
     },
@@ -42,8 +41,7 @@ export function createStubRagService(): RagService {
         results: [],
         error: {
           kind: 'not_implemented',
-          message:
-            'RAG search is not implemented yet. Developers must wire embeddings/vector index.',
+          message,
         },
       }
     },

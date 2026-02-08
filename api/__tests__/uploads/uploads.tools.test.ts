@@ -88,7 +88,7 @@ describe('uploads tools (TS)', () => {
     expect(out.ok).toBe(false)
     expect(out.results).toEqual([])
     expect(out.error?.kind).toBe('not_implemented')
-    expect(String(out.error?.message || '')).toMatch(/not implemented/i)
+    expect(String(out.error?.message || '')).toMatch(/RAG_PROVIDER=sqlite/i)
   })
 
   it('rag_search_uploads calls rag.query with upload filters and returns output', async () => {

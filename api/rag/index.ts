@@ -9,6 +9,48 @@ export interface RagServiceConfig {
   provider?: 'stub' | 'sqlite'
 }
 
+function oneLine(input: string): string {
+  return String(input || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function describeErrorOneLine(error: unknown): { message: string; code: string | undefined } {
+  if (error instanceof Error) {
+    const code = (error as { code?: unknown }).code
+    return {
+      message: oneLine(error.message || 'Error'),
+      code: typeof code === 'string' && code ? code : undefined,
+    }
+  }
+
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: unknown }).message
+    const code = (error as { code?: unknown }).code
+    return {
+      message: oneLine(typeof message === 'string' ? message : 'Error'),
+      code: typeof code === 'string' && code ? code : undefined,
+    }
+  }
+
+  return { message: oneLine(String(error ?? 'Error')), code: undefined }
+}
+
+function createUnavailableRagService(error: { kind: string; message: string }): RagService {
+  return {
+    async upsertDocuments(_docs) {
+      return { ok: false, upserted: 0, error }
+    },
+    async deleteDocuments(_ids) {
+      return { ok: false, deleted: 0, error }
+    },
+    async query(query: string) {
+      return { ok: false, query: String(query ?? ''), results: [], error }
+    },
+  }
+}
+
 export function createRagService(config?: RagServiceConfig): RagService {
   const provider = config?.provider ?? process.env.RAG_PROVIDER ?? 'sqlite'
 
@@ -44,17 +86,31 @@ export function createRagService(config?: RagServiceConfig): RagService {
       return createStubRagService()
 
     case 'sqlite': {
-      const db = openRagSqliteDb(getDbPath())
-      const embeddings = createOllamaEmbeddingsService({
-        ollamaUrl: getOllamaUrl(),
-        model: getEmbedModel(),
-      })
+      try {
+        const db = openRagSqliteDb(getDbPath())
+        const embeddings = createOllamaEmbeddingsService({
+          ollamaUrl: getOllamaUrl(),
+          model: getEmbedModel(),
+        })
 
-      return createSqliteRagService({
-        db,
-        embeddings,
-        config: ragConfig,
-      })
+        return createSqliteRagService({
+          db,
+          embeddings,
+          config: ragConfig,
+        })
+      } catch (error: unknown) {
+        // Best-effort: if sqlite fails, don't crash the server.
+        if (process.env.NODE_ENV !== 'test') {
+          const diag = describeErrorOneLine(error)
+          const suffix = diag.code ? ` (code=${diag.code})` : ''
+          console.error(`[rag] sqlite unavailable: ${diag.message}${suffix}`)
+        }
+        return createUnavailableRagService({
+          kind: 'db_unavailable',
+          message:
+            'RAG storage is unavailable. Check RAG_DB_PATH, file permissions, and that SQLite can open the database.',
+        })
+      }
     }
 
     default:
