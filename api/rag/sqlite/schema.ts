@@ -14,12 +14,12 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
   embeddingJson TEXT NOT NULL
 );
 `.trim(),
-  'CREATE INDEX IF NOT EXISTS rag_chunks_source_sourceId ON rag_chunks (source, sourceId);',
-  'CREATE INDEX IF NOT EXISTS rag_chunks_docId ON rag_chunks (docId);',
-]
+  "CREATE INDEX IF NOT EXISTS rag_chunks_source_sourceId ON rag_chunks (source, sourceId);",
+  "CREATE INDEX IF NOT EXISTS rag_chunks_docId ON rag_chunks (docId);",
+];
 
 // Back-compat aliases (older internal names)
-export const RAG_SCHEMA_MIGRATIONS: string[] = MIGRATIONS
+export const RAG_SCHEMA_MIGRATIONS: string[] = MIGRATIONS;
 export const RAG_SCHEMA_SQL = `
-${MIGRATIONS.join('\n\n')}
-`
+${MIGRATIONS.join("\n\n")}
+`;

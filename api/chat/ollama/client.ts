@@ -11,20 +11,20 @@ export async function streamOllamaChatCompletionsOnce({
   chatCompletionsMessages: unknown
   tools: unknown
   requestId?: string
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
 }): Promise<Response> {
   const response = await fetch(`${ollamaUrl}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       messages: chatCompletionsMessages,
       stream: true,
       tools,
-      tool_choice: 'auto',
+      tool_choice: "auto",
     }),
     signal: abortSignal ?? null,
-  })
+  });
 
-  return response
+  return response;
 }

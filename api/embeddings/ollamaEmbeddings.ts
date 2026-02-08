@@ -1,39 +1,39 @@
-import type { EmbeddingVector, EmbeddingsError, EmbeddingsService } from './types.ts'
+import type { EmbeddingVector, EmbeddingsError, EmbeddingsService } from "./types.ts";
 
 export type EmbeddingsHealth =
   | { ok: true }
-  | { ok: false; error: EmbeddingsError }
+  | { ok: false; error: EmbeddingsError };
 
 function asEmbeddingsError(error: unknown): EmbeddingsError {
-  if (error && typeof error === 'object') {
-    const kind = (error as { kind?: unknown }).kind
-    const message = (error as { message?: unknown }).message
-    if (typeof kind === 'string' && typeof message === 'string') {
-      return { kind, message }
+  if (error && typeof error === "object") {
+    const kind = (error as { kind?: unknown }).kind;
+    const message = (error as { message?: unknown }).message;
+    if (typeof kind === "string" && typeof message === "string") {
+      return { kind, message };
     }
   }
 
   if (error instanceof Error) {
-    return { kind: 'unknown', message: error.message }
+    return { kind: "unknown", message: error.message };
   }
 
-  return { kind: 'unknown', message: 'Unknown embeddings error' }
+  return { kind: "unknown", message: "Unknown embeddings error" };
 }
 
 function sanitizeBaseUrl(url: string): string {
-  return String(url || '').trim().replace(/\/+$/, '')
+  return String(url || "").trim().replace(/\/+$/, "");
 }
 
 function isNonEmptyNumberArray(value: unknown): value is number[] {
-  if (!Array.isArray(value) || value.length === 0) return false
-  return value.every((v) => typeof v === 'number' && Number.isFinite(v))
+  if (!Array.isArray(value) || value.length === 0) { return false; }
+  return value.every((v) => typeof v === "number" && Number.isFinite(v));
 }
 
 function maybeTruncate(input: string, maxChars?: number): string {
-  if (typeof maxChars !== 'number' || !Number.isFinite(maxChars) || maxChars <= 0) return input
-  const cap = Math.floor(maxChars)
-  if (input.length <= cap) return input
-  return input.slice(0, cap) + '\n\n[TRUNCATED]'
+  if (typeof maxChars !== "number" || !Number.isFinite(maxChars) || maxChars <= 0) { return input; }
+  const cap = Math.floor(maxChars);
+  if (input.length <= cap) { return input; }
+  return input.slice(0, cap) + "\n\n[TRUNCATED]";
 }
 
 export function createOllamaEmbeddingsService({
@@ -43,100 +43,100 @@ export function createOllamaEmbeddingsService({
 }: {
   ollamaUrl: string
   model: string
-  timeoutMs?: number
+  timeoutMs?: number,
 }): EmbeddingsService {
-  const baseUrl = sanitizeBaseUrl(ollamaUrl)
-  const configuredModel = String(model || '').trim()
+  const baseUrl = sanitizeBaseUrl(ollamaUrl);
+  const configuredModel = String(model || "").trim();
 
   return {
     async embedText(input: string, maxChars?: number): Promise<EmbeddingVector> {
-      const trimmed = String(input ?? '').trim()
+      const trimmed = String(input ?? "").trim();
       if (!trimmed) {
         throw {
-          kind: 'invalid_input',
-          message: 'Embedding input is empty',
-        } satisfies EmbeddingsError
+          kind: "invalid_input",
+          message: "Embedding input is empty",
+        } satisfies EmbeddingsError;
       }
 
-      const prepared = maybeTruncate(trimmed, maxChars)
+      const prepared = maybeTruncate(trimmed, maxChars);
 
-      const abortController = new AbortController()
-      const timeout = setTimeout(() => abortController.abort(), timeoutMs)
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), timeoutMs);
       try {
         const resp = await fetch(`${baseUrl}/api/embed`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({ model: configuredModel, input: prepared }),
           signal: abortController.signal,
-        })
+        });
 
         if (!resp.ok) {
           throw {
-            kind: 'network',
+            kind: "network",
             message: `Embeddings request failed (HTTP ${resp.status}) for model "${configuredModel}"`,
-          } satisfies EmbeddingsError
+          } satisfies EmbeddingsError;
         }
 
-        const json: unknown = await resp.json().catch(() => null)
+        const json: unknown = await resp.json().catch(() => null);
         const embeddings =
-          json && typeof json === 'object'
+          json && typeof json === "object"
             ? (json as { embeddings?: unknown }).embeddings
-            : undefined
+            : undefined;
 
         if (!Array.isArray(embeddings)) {
           throw {
-            kind: 'unsupported_model',
+            kind: "unsupported_model",
             message: `Embeddings failed for model "${configuredModel}". Verify OLLAMA_EMBED_MODEL supports /api/embed and that Ollama is up to date.`,
-          } satisfies EmbeddingsError
+          } satisfies EmbeddingsError;
         }
 
-        const first = embeddings[0]
+        const first = embeddings[0];
         if (!Array.isArray(first) || !isNonEmptyNumberArray(first)) {
           throw {
-            kind: 'unsupported_model',
+            kind: "unsupported_model",
             message: `Embeddings failed for model "${configuredModel}". Verify OLLAMA_EMBED_MODEL supports /api/embed and returns numeric vectors.`,
-          } satisfies EmbeddingsError
+          } satisfies EmbeddingsError;
         }
 
-        return first
+        return first;
       } catch (error: unknown) {
         if (abortController.signal.aborted) {
           throw {
-            kind: 'network',
+            kind: "network",
             message: `Embeddings request timed out for model "${configuredModel}"`,
-          } satisfies EmbeddingsError
+          } satisfies EmbeddingsError;
         }
 
-        const normalized = asEmbeddingsError(error)
+        const normalized = asEmbeddingsError(error);
         if (
-          normalized.kind === 'invalid_input' ||
-          normalized.kind === 'unsupported_model' ||
-          normalized.kind === 'network'
+          normalized.kind === "invalid_input" ||
+          normalized.kind === "unsupported_model" ||
+          normalized.kind === "network"
         ) {
-          throw normalized
+          throw normalized;
         }
 
         throw {
-          kind: 'network',
+          kind: "network",
           message: normalized.message,
-        } satisfies EmbeddingsError
+        } satisfies EmbeddingsError;
       } finally {
-        clearTimeout(timeout)
+        clearTimeout(timeout);
       }
     },
-  }
+  };
 }
 
 export async function checkEmbeddingsHealth(service: EmbeddingsService): Promise<EmbeddingsHealth> {
   try {
-    const vector = await service.embedText('health check')
+    const vector = await service.embedText("health check");
     if (!isNonEmptyNumberArray(vector)) {
-      return { ok: false, error: { kind: 'invalid_response', message: 'Embeddings vector is invalid' } }
+      return { ok: false, error: { kind: "invalid_response", message: "Embeddings vector is invalid" } };
     }
-    return { ok: true }
+    return { ok: true };
   } catch (error: unknown) {
-    return { ok: false, error: asEmbeddingsError(error) }
+    return { ok: false, error: asEmbeddingsError(error) };
   }
 }

@@ -1,1 +1,1 @@
-export { createHandleChat } from './handleChat.ts'
+export { createHandleChat } from "./handleChat.ts";

@@ -1,1 +1,1 @@
-export const EMBEDDING_DIM = 768
+export const EMBEDDING_DIM = 768;

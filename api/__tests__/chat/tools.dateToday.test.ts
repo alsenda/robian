@@ -1,146 +1,146 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { EventEmitter } from 'node:events'
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { EventEmitter } from "node:events";
 
-let pipeSpy: ReturnType<typeof vi.fn>
+let pipeSpy: ReturnType<typeof vi.fn>;
 
 function createSseStream(dataEvents: string[]) {
-  const encoder = new TextEncoder()
+  const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       for (const event of dataEvents) {
-        controller.enqueue(encoder.encode(`data: ${event}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${event}\n\n`));
       }
-      controller.close()
+      controller.close();
     },
-  })
+  });
 }
 
 async function waitFor(conditionFn: () => boolean, { maxAttempts = 50, delayMs = 5 } = {}) {
   for (let i = 0; i < maxAttempts; i++) {
-    if (conditionFn()) return
+    if (conditionFn()) { return; }
     // eslint-disable-next-line no-await-in-loop
-    await new Promise((resolve) => setTimeout(resolve, delayMs))
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 
-vi.mock('@tanstack/ai', async (importOriginal) => {
-  const actual = await importOriginal<any>()
+vi.mock("@tanstack/ai", async (importOriginal) => {
+  const actual = await importOriginal<any>();
   return {
     ...actual,
     convertMessagesToModelMessages: vi.fn((messages: unknown) => messages),
-  }
-})
+  };
+});
 
-vi.mock('node:stream', () => {
-  pipeSpy = vi.fn()
+vi.mock("node:stream", () => {
+  pipeSpy = vi.fn();
   return {
     Readable: {
       fromWeb: vi.fn((webStream: any) => {
-        if (webStream && typeof webStream.getReader === 'function') {
+        if (webStream && typeof webStream.getReader === "function") {
           const reader = webStream.getReader()
-          ;(async () => {
+          ; (async () => {
             try {
               while (true) {
-                const { done } = await reader.read()
-                if (done) break
+                const { done } = await reader.read();
+                if (done) { break; }
               }
             } finally {
               try {
-                reader.releaseLock()
+                reader.releaseLock();
               } catch {
                 // ignore
               }
             }
-          })()
+          })();
         }
 
         const nodeStream = {
           pipe: pipeSpy,
           on: vi.fn(() => nodeStream),
           destroy: vi.fn(),
-        }
-        return nodeStream
+        };
+        return nodeStream;
       }),
     },
-  }
-})
+  };
+});
 
-const { createHandleChat } = await import('../../chat/index.ts')
-const { createRagService } = await import('../../rag/index.ts')
+const { createHandleChat } = await import("../../chat/index.ts");
+const { createRagService } = await import("../../rag/index.ts");
 
-const ragService = createRagService()
-const handleChat = createHandleChat({ ragService })
+const ragService = createRagService();
+const handleChat = createHandleChat({ ragService });
 
 function createReqRes({ body }: { body?: unknown } = {}) {
-  const req = new EventEmitter() as any
-  req.body = body
+  const req = new EventEmitter() as any;
+  req.body = body;
 
-  const headers = new Map<string, unknown>()
-  const res = new EventEmitter() as any
+  const headers = new Map<string, unknown>();
+  const res = new EventEmitter() as any;
   Object.assign(res, {
     statusCode: undefined as number | undefined,
     status(code: number) {
-      this.statusCode = code
-      return this
+      this.statusCode = code;
+      return this;
     },
     setHeader(key: string, value: unknown) {
-      headers.set(key, value)
+      headers.set(key, value);
     },
     flushHeaders: vi.fn(),
     write: vi.fn(),
     end: vi.fn(),
     jsonPayload: undefined as unknown,
     json(payload: unknown) {
-      this.jsonPayload = payload
-      return this
+      this.jsonPayload = payload;
+      return this;
     },
-  })
+  });
 
-  return { req, res, headers }
+  return { req, res, headers };
 }
 
-describe('date_today tool integration (TS)', () => {
-  const originalEnv = process.env
-  const originalFetch = globalThis.fetch
+describe("date_today tool integration (TS)", () => {
+  const originalEnv = process.env;
+  const originalFetch = globalThis.fetch;
 
-  const defaultCompletionUrl = 'http://localhost:11434/v1/chat/completions'
-  const defaultModel = 'robian:latest'
+  const defaultCompletionUrl = "http://localhost:11434/v1/chat/completions";
+  const defaultModel = "robian:latest";
 
   beforeEach(() => {
-    process.env = { ...originalEnv }
-    delete process.env.OLLAMA_URL
-    delete process.env.OLLAMA_MODEL
-    delete process.env.RAG_PROVIDER
+    process.env = { ...originalEnv };
+    delete process.env.OLLAMA_URL;
+    delete process.env.OLLAMA_MODEL;
+    delete process.env.RAG_PROVIDER;
 
     globalThis.fetch = vi.fn(async () => {
       return {
         ok: true,
         status: 200,
-        statusText: 'OK',
+        statusText: "OK",
         body: createSseStream([
-          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'hi' } }] }),
-          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: '!' }, finish_reason: 'stop' }] }),
-          '[DONE]',
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: "hi" } }] }),
+          JSON.stringify({ model: defaultModel, choices: [{ delta: { content: "!" }, finish_reason: "stop" }] }),
+          "[DONE]",
         ]),
-      } as any
-    })
-  })
+      } as any;
+    });
+  });
 
   afterEach(() => {
-    process.env = originalEnv
-    globalThis.fetch = originalFetch
-  })
+    process.env = originalEnv;
+    globalThis.fetch = originalFetch;
+  });
 
-  it('executes date_today even when tool call uses parameters object', async () => {
-    const completionBodies: any[] = []
-    let completionCall = 0
+  it("executes date_today even when tool call uses parameters object", async () => {
+    const completionBodies: any[] = [];
+    let completionCall = 0;
 
     globalThis.fetch = vi.fn(async (url, init) => {
       if (String(url) === defaultCompletionUrl) {
-        completionCall += 1
+        completionCall += 1;
         if (init?.body) {
           try {
-            completionBodies.push(JSON.parse(String(init.body)))
+            completionBodies.push(JSON.parse(String(init.body)));
           } catch {
             // ignore
           }
@@ -150,52 +150,52 @@ describe('date_today tool integration (TS)', () => {
           return {
             ok: true,
             status: 200,
-            statusText: 'OK',
+            statusText: "OK",
             body: createSseStream([
               JSON.stringify({
                 model: defaultModel,
                 choices: [
                   {
                     delta: {
-                      tool_calls: [{ index: 0, id: 'call_1', name: 'date_today', parameters: {} }],
+                      tool_calls: [{ index: 0, id: "call_1", name: "date_today", parameters: {} }],
                     },
-                    finish_reason: 'tool_calls',
+                    finish_reason: "tool_calls",
                   },
                 ],
               }),
-              '[DONE]',
+              "[DONE]",
             ]),
-          } as any
+          } as any;
         }
 
         return {
           ok: true,
           status: 200,
-          statusText: 'OK',
+          statusText: "OK",
           body: createSseStream([
-            JSON.stringify({ model: defaultModel, choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] }),
-            '[DONE]',
+            JSON.stringify({ model: defaultModel, choices: [{ delta: { content: "Done." }, finish_reason: "stop" }] }),
+            "[DONE]",
           ]),
-        } as any
+        } as any;
       }
 
-      throw new Error(`Unexpected fetch url: ${String(url)}`)
-    }) as any
+      throw new Error(`Unexpected fetch url: ${String(url)}`);
+    }) as any;
 
     const { req, res } = createReqRes({
-      body: { messages: [{ role: 'user', content: "what's today's date?" }] },
-    })
+      body: { messages: [{ role: "user", content: "what's today's date?" }] },
+    });
 
-    await handleChat(req, res)
+    await handleChat(req, res);
 
-    await waitFor(() => completionCall >= 2)
+    await waitFor(() => completionCall >= 2);
 
-    expect(res.statusCode).toBe(200)
-    expect(completionCall).toBe(2)
+    expect(res.statusCode).toBe(200);
+    expect(completionCall).toBe(2);
 
-    const second = completionBodies.at(1)
-    const toolMsg = second?.messages?.find?.((m: any) => m?.role === 'tool')
-    expect(typeof toolMsg?.content).toBe('string')
-    expect(toolMsg.content).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/)
-  })
-})
+    const second = completionBodies.at(1);
+    const toolMsg = second?.messages?.find?.((m: any) => m?.role === "tool");
+    expect(typeof toolMsg?.content).toBe("string");
+    expect(toolMsg.content).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+  });
+});

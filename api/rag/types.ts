@@ -1,70 +1,70 @@
-export type RagDocId = string
+export type RagDocId = string;
 
-export type RagSource = 'upload'
+export type RagSource = "upload";
 
 export interface RagDocumentInput {
-  id: RagDocId
-  source: RagSource
-  sourceId: string
-  title?: string
-  text: string
-  mimeType?: string
-  createdAt: string
-  meta?: Record<string, unknown>
+  id: RagDocId;
+  source: RagSource;
+  sourceId: string;
+  title?: string;
+  text: string;
+  mimeType?: string;
+  createdAt: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface RagError {
-  kind: string
-  message: string
+  kind: string;
+  message: string;
 }
 
 export interface RagUpsertResult {
-  ok: boolean
-  upserted: number
-  error?: RagError
+  ok: boolean;
+  upserted: number;
+  error?: RagError;
 }
 
 export interface RagDeleteResult {
-  ok: boolean
-  deleted: number
-  error?: RagError
+  ok: boolean;
+  deleted: number;
+  error?: RagError;
 }
 
 export interface RagQueryFilters {
-  source?: RagSource
-  sourceId?: string
-  mimeType?: string
+  source?: RagSource;
+  sourceId?: string;
+  mimeType?: string;
 }
 
 export interface RagQueryResultItem {
-  id: RagDocId
+  id: RagDocId;
   /** Stable identifier for the retrieved chunk (alias of id). */
-  chunkId?: string
+  chunkId?: string;
   /** Original document id (before chunking). */
-  documentId?: string
+  documentId?: string;
   /** Human-friendly source name (usually original filename). */
-  filename?: string
+  filename?: string;
   /** Best-effort page range. For non-paginated text, may default to 1-1. */
-  pageStart?: number
+  pageStart?: number;
   /** Best-effort page range. For non-paginated text, may default to 1-1. */
-  pageEnd?: number
-  score: number
-  source: RagSource
-  sourceId: string
-  title?: string
-  excerpt?: string
-  meta?: Record<string, unknown>
+  pageEnd?: number;
+  score: number;
+  source: RagSource;
+  sourceId: string;
+  title?: string;
+  excerpt?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface RagQueryResult {
-  ok: boolean
-  query: string
-  results: RagQueryResultItem[]
-  error?: RagError
+  ok: boolean;
+  query: string;
+  results: RagQueryResultItem[];
+  error?: RagError;
 }
 
 export interface RagService {
-  upsertDocuments(docs: RagDocumentInput[]): Promise<RagUpsertResult>
-  deleteDocuments(ids: RagDocId[]): Promise<RagDeleteResult>
-  query(query: string, topK?: number, filters?: RagQueryFilters): Promise<RagQueryResult>
+  upsertDocuments(docs: RagDocumentInput[]): Promise<RagUpsertResult>;
+  deleteDocuments(ids: RagDocId[]): Promise<RagDeleteResult>;
+  query(query: string, topK?: number, filters?: RagQueryFilters): Promise<RagQueryResult>;
 }
