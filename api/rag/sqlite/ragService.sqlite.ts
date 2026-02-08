@@ -104,19 +104,21 @@ export function createSqliteRagService({
             const vec = await embeddings.embedText(chunk.text, config.maxDocChars)
             const chunkId = `${docId}:${chunk.chunkIndex}`
 
-            db.insertChunk({
+            const row = {
               id: chunkId,
               docId,
               source: doc.source,
               sourceId: doc.sourceId,
-              title: doc.title,
-              mimeType: doc.mimeType,
               createdAt: doc.createdAt,
               chunkIndex: chunk.chunkIndex,
               text: chunk.text,
               metaJson: safeJsonStringify(doc.meta ?? {}),
               embeddingJson: JSON.stringify(vec),
-            })
+              ...(doc.title ? { title: doc.title } : {}),
+              ...(doc.mimeType ? { mimeType: doc.mimeType } : {}),
+            }
+
+            db.insertChunk(row)
 
             upserted += 1
           }
@@ -140,7 +142,7 @@ export function createSqliteRagService({
         const queryVec = await embeddings.embedText(q, config.maxQueryChars)
 
         const limit = filters ? Math.max(k * 50, k) : config.candidateLimit
-        const candidates = db.selectCandidates({ filters, limit })
+        const candidates = db.selectCandidates(filters ? { filters, limit } : { limit })
 
         type Scored = {
           id: string

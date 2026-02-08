@@ -90,4 +90,50 @@ describe('uploads tools (TS)', () => {
     expect(out.error?.kind).toBe('not_implemented')
     expect(String(out.error?.message || '')).toMatch(/not implemented/i)
   })
+
+  it('rag_search_uploads calls rag.query with upload filters and returns output', async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => ({
+        ok: true,
+        query: 'q',
+        results: [
+          {
+            id: 'doc:0',
+            score: 0.9,
+            source: 'upload',
+            sourceId: 'u1',
+            title: 't',
+            excerpt: 'e',
+          },
+        ],
+      })),
+    }
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any })
+    const out = (await tool.execute({ query: 'q', topK: 5, sourceId: 'u1' })) as RagQueryResult
+    expect(out.ok).toBe(true)
+    expect(out.results.length).toBe(1)
+    expect(rag.query).toHaveBeenCalledTimes(1)
+    expect(rag.query).toHaveBeenCalledWith('q', 5, { source: 'upload', sourceId: 'u1' })
+  })
+
+  it('rag_search_uploads returns ok:false when rag.query throws', async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi.fn(async () => {
+        throw new Error('no db')
+      }),
+    }
+
+    const tool = createRagSearchUploadsTool({ rag: rag as any })
+    const out = (await tool.execute({ query: 'q' })) as RagQueryResult
+    expect(out.ok).toBe(false)
+    expect(out.query).toBe('q')
+    expect(out.results).toEqual([])
+    expect(out.error?.kind).toBe('rag_unavailable')
+    expect(String(out.error?.message || '')).toMatch(/no db|unavailable/i)
+  })
 })

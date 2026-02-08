@@ -12,7 +12,6 @@ import {
   getManifestEntry,
   listManifestEntries,
 } from './db/manifest.ts'
-import { isTextLikeExtension } from './security/allowedTypes.ts'
 
 import type { RagService, RagDocumentInput } from '../rag/types.ts'
 
@@ -20,8 +19,13 @@ export interface CreateUploadsRouterDeps {
   rag: RagService
 }
 
-const RAG_MAX_UPSERT_BYTES = 1_000_000
-const RAG_MAX_CHARS = 20_000
+const RAG_TEXT_MIME_TYPES = new Set(['text/plain', 'text/markdown', 'application/json', 'text/csv'])
+
+function parseIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]
+  const n = raw ? Number(raw) : NaN
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
+}
 
 function isNotImplementedError(result: { error?: { kind?: string } } | null | undefined): boolean {
   return Boolean(result?.error?.kind === 'not_implemented')
@@ -46,8 +50,11 @@ async function bestEffortUpsertToRag({
     if (!out.ok && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
       console.log('[uploads] RAG upsert failed')
     }
-  } catch {
-    // best-effort; do not fail request
+  } catch (error: unknown) {
+    if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      const message = error instanceof Error ? error.message : 'unknown error'
+      console.log(`[uploads] RAG upsert threw: ${message}`)
+    }
   }
 }
 
@@ -60,8 +67,14 @@ async function bestEffortDeleteFromRag({ rag, id }: { rag: RagService; id: strin
       }
       return
     }
-  } catch {
-    // best-effort; do not fail request
+    if (!out.ok && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      console.log('[uploads] RAG delete failed')
+    }
+  } catch (error: unknown) {
+    if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      const message = error instanceof Error ? error.message : 'unknown error'
+      console.log(`[uploads] RAG delete threw: ${message}`)
+    }
   }
 }
 
@@ -124,14 +137,10 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
 
       await addManifestEntry(entry)
 
-      // Best-effort RAG upsert for small, text-like uploads only.
-      const ext = String(typeInfo.extension || '').toLowerCase()
-      const eligible =
-        preview.extractable &&
-        isTextLikeExtension(ext) &&
-        file.size <= RAG_MAX_UPSERT_BYTES
-      if (eligible) {
-        const text = Buffer.from(file.buffer).toString('utf8').slice(0, RAG_MAX_CHARS)
+      // Best-effort RAG upsert for plain-text extractable mime types only.
+      if (RAG_TEXT_MIME_TYPES.has(String(typeInfo.mimeType || '').toLowerCase())) {
+        const maxChars = parseIntEnv('RAG_MAX_TEXT_CHARS_PER_DOC', 200_000)
+        const text = Buffer.from(file.buffer).toString('utf8').slice(0, maxChars)
         const doc: RagDocumentInput = {
           id,
           source: 'upload',

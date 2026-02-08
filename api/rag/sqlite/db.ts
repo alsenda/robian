@@ -107,19 +107,22 @@ function asCandidateRow(row: unknown): RagChunkRow | null {
   if (!text) return null
   if (!embeddingJson) return null
 
-  return {
+  const out: RagChunkRow = {
     id,
     docId,
     source: source as RagSource,
     sourceId,
-    title,
-    mimeType,
     createdAt,
     chunkIndex,
     text,
-    metaJson,
     embeddingJson,
   }
+
+  if (title) out.title = title
+  if (mimeType) out.mimeType = mimeType
+  if (metaJson) out.metaJson = metaJson
+
+  return out
 }
 
 export function openRagSqliteDb(dbPath: string): {

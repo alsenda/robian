@@ -3,8 +3,12 @@ import type { RagQueryResult, RagService } from '../../rag/types.ts'
 
 export const ragSearchUploadsDef = {
   name: 'rag_search_uploads',
-  description: 'Semantic search over uploaded documents (stub; not implemented).',
-  inputSchema: z.object({ query: z.string().min(1), topK: z.number().int().positive().optional() }),
+  description: 'Semantic search over uploaded documents (RAG).',
+  inputSchema: z.object({
+    query: z.string().min(1),
+    topK: z.number().int().positive().optional(),
+    sourceId: z.string().min(1).optional(),
+  }),
 }
 
 export type RagSearchUploadsTool = {
@@ -28,9 +32,21 @@ export function createRagSearchUploadsTool({ rag }: { rag: RagService }): RagSea
         }
       }
 
-      const { query, topK } = parsed.data
-      const out = await rag.query(query, topK)
-      return out
+      const { query, topK, sourceId } = parsed.data
+      try {
+        return await rag.query(query, topK, {
+          source: 'upload',
+          ...(sourceId ? { sourceId } : {}),
+        })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'RAG unavailable'
+        return {
+          ok: false,
+          query,
+          results: [],
+          error: { kind: 'rag_unavailable', message },
+        }
+      }
     },
   }
 }

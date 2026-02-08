@@ -227,4 +227,76 @@ describe('uploads HTTP API (TS)', () => {
     expect(deleteDocuments).toHaveBeenCalledTimes(1)
     expect(deleteDocuments).toHaveBeenCalledWith([uploadId])
   })
+
+  it('uploads succeed even when rag.upsertDocuments throws (best-effort)', async () => {
+    const upsertDocuments = vi.fn(async () => {
+      throw new Error('boom')
+    })
+
+    const deleteDocuments = vi.fn(async () => ({ ok: true, deleted: 1 }))
+    const query = vi.fn(async (q: string) => ({ ok: true, query: q, results: [] }))
+
+    vi.doMock('../../rag/index.ts', async () => {
+      const actual = await vi.importActual<typeof import('../../rag/index.ts')>('../../rag/index.ts')
+      return {
+        ...actual,
+        createRagService: vi.fn(() => ({ upsertDocuments, deleteDocuments, query })),
+      }
+    })
+
+    vi.resetModules()
+    const { createApp } = await import('../../app.ts')
+    const app = createApp()
+
+    const uploadRes = await request(app)
+      .post('/api/uploads')
+      .attach('file', Buffer.from('hello rag'), {
+        filename: 'rag.txt',
+        contentType: 'text/plain',
+      })
+
+    expect(uploadRes.status).toBe(200)
+    expect(uploadRes.body.ok).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(upsertDocuments).toHaveBeenCalledTimes(1)
+  })
+
+  it('deletes succeed even when rag.deleteDocuments throws (best-effort)', async () => {
+    const upsertDocuments = vi.fn(async () => ({ ok: true, upserted: 1 }))
+    const deleteDocuments = vi.fn(async () => {
+      throw new Error('boom')
+    })
+    const query = vi.fn(async (q: string) => ({ ok: true, query: q, results: [] }))
+
+    vi.doMock('../../rag/index.ts', async () => {
+      const actual = await vi.importActual<typeof import('../../rag/index.ts')>('../../rag/index.ts')
+      return {
+        ...actual,
+        createRagService: vi.fn(() => ({ upsertDocuments, deleteDocuments, query })),
+      }
+    })
+
+    vi.resetModules()
+    const { createApp } = await import('../../app.ts')
+    const app = createApp()
+
+    const uploadRes = await request(app)
+      .post('/api/uploads')
+      .attach('file', Buffer.from('bye'), {
+        filename: 'bye.txt',
+        contentType: 'text/plain',
+      })
+
+    expect(uploadRes.status).toBe(200)
+    const id = String(uploadRes.body.upload.id)
+
+    const del = await request(app).delete(`/api/uploads/${encodeURIComponent(id)}`)
+    expect(del.status).toBe(200)
+    expect(del.body.ok).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deleteDocuments).toHaveBeenCalledTimes(1)
+    expect(deleteDocuments).toHaveBeenCalledWith([id])
+  })
 })
