@@ -9,6 +9,9 @@ node_modules/
 dist/
 *.log
 
+# Local app data (uploads, manifests, etc.)
+/.data/
+
 # Editor directories
 .vscode/
 .idea/
