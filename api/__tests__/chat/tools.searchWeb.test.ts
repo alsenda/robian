@@ -65,7 +65,11 @@ vi.mock('node:stream', () => {
   }
 })
 
-const { handleChat } = await import('../../chat/index.ts')
+const { createHandleChat } = await import('../../chat/index.ts')
+const { createRagService } = await import('../../rag/index.ts')
+
+const ragService = createRagService()
+const handleChat = createHandleChat({ ragService })
 
 function createReqRes({ body }: { body?: unknown } = {}) {
   const req = new EventEmitter() as any
@@ -106,6 +110,7 @@ describe('search_web tool integration (TS)', () => {
     process.env = { ...originalEnv }
     delete process.env.OLLAMA_URL
     delete process.env.OLLAMA_MODEL
+    delete process.env.RAG_PROVIDER
     delete process.env.WEB_SEARCH_PROVIDER
     delete process.env.BRAVE_SEARCH_API_KEY
 

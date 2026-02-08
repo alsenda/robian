@@ -21,7 +21,6 @@ import {
 import { streamOllamaChatCompletionsOnce } from './ollama/client.ts'
 import { streamChatWithTools } from './streamChat.ts'
 import type { RagService } from '../rag/types.ts'
-import { createRagService } from '../rag/index.ts'
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 const DEFAULT_OLLAMA_MODEL = 'robian:latest'
@@ -30,7 +29,11 @@ function stripTrailingSlashes(text: string): string {
   return String(text || '').replace(/\/+$/, '')
 }
 
-export function createHandleChat({ ragService }: { ragService: RagService }) {
+export function createHandleChat({
+  ragService,
+}: {
+  ragService: RagService
+}): (req: Request, res: ExpressResponse) => Promise<void> {
   const serverTools = createServerTools({ rag: ragService })
 
   return async function handleChat(req: Request, res: ExpressResponse): Promise<void> {
@@ -149,6 +152,3 @@ export function createHandleChat({ ragService }: { ragService: RagService }) {
     }
   }
 }
-
-// Back-compat default export-like handler (uses stub RagService)
-export const handleChat = createHandleChat({ ragService: createRagService() })
