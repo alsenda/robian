@@ -40,6 +40,41 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const focusInput = () => {
+      const el = inputRef.current
+      if (!el) return
+      if (document.activeElement === el) return
+      try {
+        el.focus({ preventScroll: true })
+      } catch {
+        try {
+          el.focus()
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    const onPointerUpCapture = () => {
+      requestAnimationFrame(focusInput)
+    }
+
+    const onKeyDownCapture = (e) => {
+      // Avoid breaking common shortcuts (copy/paste, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      requestAnimationFrame(focusInput)
+    }
+
+    window.addEventListener('pointerup', onPointerUpCapture, true)
+    window.addEventListener('keydown', onKeyDownCapture, true)
+
+    return () => {
+      window.removeEventListener('pointerup', onPointerUpCapture, true)
+      window.removeEventListener('keydown', onKeyDownCapture, true)
+    }
+  }, [])
+
+  useEffect(() => {
     try {
       persistMessages(messages)
     } catch {

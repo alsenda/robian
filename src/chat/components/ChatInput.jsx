@@ -10,7 +10,6 @@ export function ChatInput({ inputRef, input, setInput, onSubmit, isLoading }) {
         value={input}
         onChange={(e) => setInput(e.target.value)}
         placeholder="Message…"
-        disabled={isLoading}
         className="flex-1 border-4 border-black bg-white px-4 py-3 text-base font-semibold text-black outline-none placeholder:text-black/60 focus:bg-yellow-100 disabled:cursor-not-allowed disabled:opacity-50"
       />
       <button
