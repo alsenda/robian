@@ -17,11 +17,8 @@ import { getUploadTool } from '../../uploads/tools/getUpload.tool.js'
 
 import { ragSearchUploadsDef, createRagSearchUploadsTool } from '../../uploads/tools/ragSearchUploads.tool.ts'
 import type { RagService } from '../../rag/types.js'
-import { createRagService } from '../../rag/index.js'
 
 export { ragSearchUploadsDef }
-
-export const ragSearchUploadsTool = createRagSearchUploadsTool(createRagService())
 
 export type ServerTool = {
   name: string

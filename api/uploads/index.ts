@@ -15,13 +15,13 @@ import {
 import { isTextLikeExtension } from './security/allowedTypes.js'
 
 import type { RagService, RagDocumentInput } from '../rag/types.js'
-import { createRagService } from '../rag/index.js'
 
 export interface CreateUploadsRouterDeps {
-  ragService?: RagService
+  ragService: RagService
 }
 
 const RAG_MAX_UPSERT_BYTES = 1_000_000
+const RAG_MAX_CHARS = 20_000
 
 function isNotImplementedError(result: { error?: { kind?: string } } | null | undefined): boolean {
   return Boolean(result?.error?.kind === 'not_implemented')
@@ -65,8 +65,8 @@ async function bestEffortDeleteFromRag({ ragService, id }: { ragService: RagServ
   }
 }
 
-export function createUploadsRouter(deps: CreateUploadsRouterDeps = {}): express.Router {
-  const ragService = deps.ragService ?? createRagService()
+export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Router {
+  const ragService = deps.ragService
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -126,9 +126,12 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps = {}): express
 
       // Best-effort RAG upsert for small, text-like uploads only.
       const ext = String(typeInfo.extension || '').toLowerCase()
-      const eligible = preview.extractable && isTextLikeExtension(ext) && file.size <= RAG_MAX_UPSERT_BYTES
+      const eligible =
+        preview.extractable &&
+        isTextLikeExtension(ext) &&
+        file.size <= RAG_MAX_UPSERT_BYTES
       if (eligible) {
-        const text = Buffer.from(file.buffer).toString('utf8')
+        const text = Buffer.from(file.buffer).toString('utf8').slice(0, RAG_MAX_CHARS)
         const doc: RagDocumentInput = {
           id,
           source: 'upload',
@@ -231,5 +234,3 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps = {}): express
 
   return uploadsRouter
 }
-
-export const uploadsRouter = createUploadsRouter()

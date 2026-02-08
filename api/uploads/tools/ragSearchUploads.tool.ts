@@ -17,7 +17,8 @@ export function createRagSearchUploadsTool(ragService: RagService) {
       }
 
       const { query, topK } = parsed.data
-      return ragService.query(query, topK)
+      const out = await ragService.query(query, topK)
+      return JSON.parse(JSON.stringify(out)) as unknown
     },
   }
 }

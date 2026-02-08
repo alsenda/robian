@@ -194,6 +194,10 @@ describe('uploads HTTP API (TS)', () => {
 
     expect(uploadRes.status).toBe(200)
     expect(uploadRes.body.ok).toBe(true)
+    const uploadId = String(uploadRes.body.upload?.id || '')
+    expect(uploadId).toBeTruthy()
+    const createdAt = String(uploadRes.body.upload?.createdAt || '')
+    expect(createdAt).toMatch(/\d{4}-\d{2}-\d{2}T/)
 
     // best-effort: should have attempted upsert
     expect(upsertDocuments).toHaveBeenCalledTimes(1)
@@ -202,8 +206,14 @@ describe('uploads HTTP API (TS)', () => {
     expect(firstCall).toBeTruthy()
     const docsArgUnknown = (firstCall as unknown[])[0]
     expect(Array.isArray(docsArgUnknown)).toBe(true)
-    const docsArg = docsArgUnknown as Array<{ source?: unknown; text?: unknown }>
+    const docsArg = docsArgUnknown as Array<Record<string, unknown>>
+    expect(docsArg[0]?.id).toBe(uploadId)
     expect(docsArg[0]?.source).toBe('upload')
+    expect(docsArg[0]?.sourceId).toBe(uploadId)
+    expect(docsArg[0]?.title).toBe('rag.txt')
+    expect(docsArg[0]?.mimeType).toBe('text/plain')
+    expect(String(docsArg[0]?.createdAt || '')).toBe(createdAt)
     expect(String(docsArg[0]?.text || '')).toContain('hello rag')
+    expect(docsArg[0]?.meta && typeof docsArg[0]?.meta === 'object').toBe(true)
   })
 })
