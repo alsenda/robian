@@ -14,6 +14,20 @@ interface PdfJsTextItem {
   hasEOL?: boolean;
 }
 
+function isDebugRagPdfEnabled(): boolean {
+  const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function debugRagPdf(event: string, data: Record<string, unknown>): void {
+  if (!isDebugRagPdfEnabled()) { return; }
+  try {
+    console.log(JSON.stringify({ tag: "rag_pdf", scope: "rag.extract.pdf", event, ...data }));
+  } catch {
+    // ignore
+  }
+}
+
 function shimPdfJsGlobalsForNode(): void {
   // pdfjs-dist's Node utilities attempt to assign `globalThis.navigator`.
   // In Node 20+/22, `navigator` may exist as a read-only getter.
@@ -223,6 +237,12 @@ export async function extractTextFromPdf(input: Buffer): Promise<PdfExtractResul
     throw new TypeError("extractTextFromPdf expects a Buffer");
   }
 
+  debugRagPdf("pdf_extract_start", {
+    bufferByteLength: (input as any)?.byteLength,
+    bufferLength: (input as any)?.length,
+    bufferType: (input as any)?.constructor?.name,
+  });
+
   shimPdfJsGlobalsForNode();
 
   // Dynamic import avoids bundler/runtime edge cases in NodeNext ESM.
@@ -239,6 +259,8 @@ export async function extractTextFromPdf(input: Buffer): Promise<PdfExtractResul
   let doc: { numPages: number; getPage: (n: number) => Promise<unknown>; destroy?: () => void } | null = null;
   try {
     doc = await loadingTask.promise;
+
+    debugRagPdf("pdf_loaded", { numPages: doc.numPages });
 
     const pages: PdfPageText[] = [];
 
@@ -261,10 +283,18 @@ export async function extractTextFromPdf(input: Buffer): Promise<PdfExtractResul
       fullText += `----- page ${page.pageNumber} -----\n\n${page.text}`;
     }
 
+    const isLikelyScanned = classifyLikelyScanned(pages);
+
+    debugRagPdf("pdf_extract_done", {
+      numPages: pages.length,
+      textChars: fullText.length,
+      isLikelyScanned,
+    });
+
     return {
       text: fullText,
       pages,
-      isLikelyScanned: classifyLikelyScanned(pages),
+      isLikelyScanned,
     };
   } catch (error: unknown) {
     const helpful = toHelpfulPdfErrorMessage(error);

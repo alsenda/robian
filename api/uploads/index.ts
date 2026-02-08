@@ -21,6 +21,21 @@ export interface CreateUploadsRouterDeps {
 
 const RAG_TEXT_MIME_TYPES = new Set(["text/plain", "text/markdown", "application/json", "text/csv"]);
 
+function isDebugRagPdfEnabled(): boolean {
+  const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function debugRagPdf(event: string, data: Record<string, unknown>): void {
+  if (!isDebugRagPdfEnabled()) { return; }
+  try {
+    // Single-line JSON for easy grepping; never include document contents.
+    console.log(JSON.stringify({ tag: "rag_pdf", scope: "api.uploads", event, ...data }));
+  } catch {
+    // ignore
+  }
+}
+
 function parseIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   const n = raw ? Number(raw) : NaN;
@@ -99,6 +114,16 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
           .json({ ok: false, error: { message: 'Missing multipart file field "file"' } });
       }
 
+      debugRagPdf("upload_received", {
+        originalName: file.originalname,
+        mimeTypeSeen: file.mimetype,
+        sizeBytes: file.size,
+        bufferIsBuffer: Buffer.isBuffer(file.buffer),
+        bufferType: (file.buffer as any)?.constructor?.name,
+        bufferByteLength: (file.buffer as any)?.byteLength,
+        bufferLength: (file.buffer as any)?.length,
+      });
+
       validateUploadOrThrow({
         originalName: file.originalname,
         mimeType: file.mimetype,
@@ -107,6 +132,14 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
 
       const id = randomUUID();
       const typeInfo = detectType({ originalName: file.originalname, mimeType: file.mimetype });
+
+      debugRagPdf("type_detected", {
+        id,
+        originalName: file.originalname,
+        mimeTypeSeen: file.mimetype,
+        detectedMimeType: typeInfo.mimeType,
+        extension: typeInfo.extension,
+      });
 
       const preview = extractPreviewText({
         buffer: file.buffer,
@@ -137,8 +170,18 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
 
       await addManifestEntry(entry);
 
+      // DIAGNOSIS (2026-02): PDF uploads are persisted (manifest + stored file) but are NOT
+      // extracted/indexed from this endpoint. Only small text-like uploads are best-effort
+      // upserted here. PDFs require an explicit ingestion trigger via POST /api/rag/ingest/:documentId
+      // which reads the stored file and runs extractTextFromUpload() -> extractTextFromPdf(buffer).
+      // Use DEBUG_RAG_PDF=true to confirm the branch taken.
       // Best-effort RAG upsert for plain-text extractable mime types only.
       if (RAG_TEXT_MIME_TYPES.has(String(typeInfo.mimeType || "").toLowerCase())) {
+        debugRagPdf("rag_upsert_eligible", {
+          id,
+          detectedMimeType: typeInfo.mimeType,
+          reason: "text_like_mime",
+        });
         const maxChars = parseIntEnv("RAG_MAX_TEXT_CHARS_PER_DOC", 200_000);
         const text = Buffer.from(file.buffer).toString("utf8").slice(0, maxChars);
         const doc: RagDocumentInput = {
@@ -158,6 +201,12 @@ export function createUploadsRouter(deps: CreateUploadsRouterDeps): express.Rout
         };
 
         void bestEffortUpsertToRag({ rag, doc });
+      } else {
+        debugRagPdf("rag_upsert_skipped", {
+          id,
+          detectedMimeType: typeInfo.mimeType,
+          reason: "non_text_like_mime_requires_explicit_ingest",
+        });
       }
 
       return res.status(200).json({ ok: true, upload: entry });

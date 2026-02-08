@@ -38,6 +38,20 @@ const jobs = new Map<string, InternalJob>();
 const queue: string[] = [];
 let workerRunning = false;
 
+function isDebugRagPdfEnabled(): boolean {
+  const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function debugRagPdf(event: string, data: Record<string, unknown>): void {
+  if (!isDebugRagPdfEnabled()) { return; }
+  try {
+    console.log(JSON.stringify({ tag: "rag_pdf", scope: "rag.ingest.queue", event, ...data }));
+  } catch {
+    // ignore
+  }
+}
+
 function toOneLine(input: string): string {
   return String(input || "")
     .replace(/[\r\n\t]+/g, " ")
@@ -59,8 +73,26 @@ async function runWorker(): Promise<void> {
       job.state = "running";
       job.startedAt = Date.now();
 
+      debugRagPdf("job_started", {
+        jobId: job.jobId,
+        documentId: job.documentId,
+        filename: job.filename,
+        mimeType: job.mimeType,
+        filePath: job.filePath,
+      });
+
       try {
         const buffer = await fsp.readFile(job.filePath);
+
+        debugRagPdf("file_read", {
+          jobId: job.jobId,
+          documentId: job.documentId,
+          bufferIsBuffer: Buffer.isBuffer(buffer),
+          bufferType: (buffer as any)?.constructor?.name,
+          bufferByteLength: (buffer as any)?.byteLength,
+          bufferLength: (buffer as any)?.length,
+        });
+
         const result = await ingestDocument({
           userId: job.userId,
           documentId: job.documentId,
@@ -72,10 +104,22 @@ async function runWorker(): Promise<void> {
         job.state = "done";
         job.result = result;
         job.finishedAt = Date.now();
+
+        debugRagPdf("job_done", {
+          jobId: job.jobId,
+          documentId: job.documentId,
+          result,
+        });
       } catch (error: unknown) {
         job.state = "failed";
         job.error = toOneLine(error instanceof Error ? error.message : String(error ?? "unknown error"));
         job.finishedAt = Date.now();
+
+        debugRagPdf("job_failed", {
+          jobId: job.jobId,
+          documentId: job.documentId,
+          error: job.error,
+        });
       }
     }
   } finally {

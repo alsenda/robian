@@ -10,6 +10,19 @@ import { chunkPdfPages } from "../text/chunkPdf.ts";
 
 import { insertChunks, upsertChunkVectors } from "../vectorStore.ts";
 import { embedTexts } from "../embeddings/ollama.ts";
+function isDebugRagPdfEnabled(): boolean {
+  const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function debugRagPdf(event: string, data: Record<string, unknown>): void {
+  if (!isDebugRagPdfEnabled()) { return; }
+  try {
+    console.log(JSON.stringify({ tag: "rag_pdf", scope: "rag.ingestDocument", event, ...data }));
+  } catch {
+    // ignore
+  }
+}
 
 export interface IngestInput {
   userId: string;
@@ -98,6 +111,17 @@ export async function ingestDocument(input: IngestInput): Promise<{ chunksInsert
   const mimeType = String(input.mimeType || "application/octet-stream").trim();
   const buffer = input.buffer;
 
+  debugRagPdf("ingest_called", {
+    userId,
+    documentId,
+    filename,
+    mimeType,
+    bufferIsBuffer: Buffer.isBuffer(buffer),
+    bufferType: (buffer as any)?.constructor?.name,
+    bufferByteLength: (buffer as any)?.byteLength,
+    bufferLength: (buffer as any)?.length,
+  });
+
   if (!userId) { throw new Error("userId is required"); }
   if (!documentId) { throw new Error("documentId is required"); }
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) { throw new Error("buffer is required"); }
@@ -112,6 +136,17 @@ export async function ingestDocument(input: IngestInput): Promise<{ chunksInsert
 
   try {
     const extracted = await extractTextFromUpload(mimeType, buffer);
+
+    // Wiring confirmation: PDFs go through extractTextFromUpload(mimeType, buffer)
+    // which routes application/pdf -> extractTextFromPdf(buffer).
+    debugRagPdf("extracted", {
+      documentId,
+      mimeType,
+      hasPages: Boolean(extracted.pages && extracted.pages.length),
+      pagesCount: extracted.pages?.length ?? 0,
+      textChars: String(extracted.text || "").length,
+      isLikelyScanned: extracted.isLikelyScanned,
+    });
 
     const chunkSizeChars = parseIntEnv("RAG_CHUNK_SIZE_CHARS", 2000);
     const overlapChars = parseIntEnv("RAG_CHUNK_OVERLAP_CHARS", 200);

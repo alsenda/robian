@@ -6,6 +6,20 @@ import { getUploadsRootDir, safeJoin } from "../uploads/storage/paths.ts";
 
 import { enqueueIngest, getIngestJobStatus } from "../../src/server/rag/ingest/queue.ts";
 
+function isDebugRagPdfEnabled(): boolean {
+  const raw = String(process.env.DEBUG_RAG_PDF || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function debugRagPdf(event: string, data: Record<string, unknown>): void {
+  if (!isDebugRagPdfEnabled()) { return; }
+  try {
+    console.log(JSON.stringify({ tag: "rag_pdf", scope: "api.rag.ingest", event, ...data }));
+  } catch {
+    // ignore
+  }
+}
+
 export function createRagIngestRouter(): express.Router {
   const router = express.Router();
 
@@ -26,6 +40,17 @@ export function createRagIngestRouter(): express.Router {
     const root = getUploadsRootDir();
     const filePath = safeJoin(root, entry.storedName);
 
+    debugRagPdf("ingest_requested", {
+      documentId,
+      userId,
+      filename: entry.originalName || entry.storedName,
+      mimeType: entry.mimeType,
+      storedName: entry.storedName,
+      filePath,
+      sizeBytes: entry.sizeBytes,
+      extension: entry.extension,
+    });
+
     // Extra sanity: ensure extension matches storedName.
     const ext = path.extname(entry.storedName || "");
     if (!ext) {
@@ -36,6 +61,13 @@ export function createRagIngestRouter(): express.Router {
       userId,
       documentId,
       filename: entry.originalName || entry.storedName,
+      mimeType: entry.mimeType,
+      filePath,
+    });
+
+    debugRagPdf("ingest_enqueued", {
+      jobId,
+      documentId,
       mimeType: entry.mimeType,
       filePath,
     });
