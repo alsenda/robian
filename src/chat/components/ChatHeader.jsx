@@ -7,7 +7,7 @@ export function ChatHeader({ onRestart }) {
             ROB<span className="text-fuchsia-500">IA</span>N
           </div>
           <div className="mt-1 text-[12px] font-extrabold uppercase tracking-widest text-black/80">
-            A UI DESIGN TREND CHARACTERIZED BY A STARK AND RAW LOOK
+            YOUR DUMB AI COMPANION
           </div>
         </div>
 

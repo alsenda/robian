@@ -17,7 +17,7 @@ export function ChatMessages({ messages, isLoading, error, messagesViewportRef, 
         <div className="flex h-full items-center justify-center px-4">
           <div className="max-w-2xl border-4 border-black bg-yellow-200 px-5 py-4 text-black shadow-2xl shadow-black/35">
             <div className="text-2xl font-black leading-tight">
-              How can I design in the Neobrutalism style?
+              How can I help you in the Neobrutalism style?
             </div>
             <div className="mt-2 text-[12px] font-extrabold uppercase tracking-widest text-black/80">
               Ask anything. Streaming answers. Raw UI.
