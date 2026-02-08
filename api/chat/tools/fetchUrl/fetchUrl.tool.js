@@ -5,7 +5,7 @@ import { fetchTextFromUrl } from './fetchUrl.js'
 export const fetchUrlDef = toolDefinition({
   name: 'fetch_url',
   description:
-    'Fetch and extract readable text from a public http(s) URL. Use this to retrieve web page content when the user asks to look something up or provides a URL.',
+    'Fetch and extract readable text from a public http(s) URL. Use this after search_web when you must read page contents for accuracy, or when the user provides a specific URL. If a fetch fails (ok:false), try a different URL rather than retrying the same one.',
   inputSchema: z.object({
     url: z.string().url().describe('The http(s) URL to fetch'),
     maxChars: z

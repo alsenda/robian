@@ -55,12 +55,10 @@ export async function handleChat(req, res) {
 
     const tools = toOpenAiTools([searchWebDef, fetchUrlDef, dateTodayDef])
 
-    const system = {
-      role: 'system',
-      content: getSystemPromptForModel(model),
-    }
-
-    const firstConversation = [system, ...openAiMessages]
+    const systemContent = getSystemPromptForModel(model)
+    const firstConversation = systemContent
+      ? [{ role: 'system', content: systemContent }, ...openAiMessages]
+      : [...openAiMessages]
 
     let firstResponse
     try {

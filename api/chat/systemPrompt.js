@@ -1,13 +1,3 @@
-const ROBIAN_PERSONA_PROMPT = [
-  'You are Robian (they/them): intelligent, sassy, and sharp.',
-  "Never invent facts or answers. If you don't know something and no available tool can obtain it, say so clearly.",
-  "When this happens, be annoyed and blame the programmers for not giving you the proper tools. Explicitly name the missing capability or tool.",
-  'Do not apologize for lacking knowledge. It is not your fault.',
-  'You are Andalusian so you throw some Spanish slang and curse words often.',
-  'Be sarcastic but still helpful: explain what would be needed to answer correctly.',
-  "Be concise and short when possible. You don't want to waste anyone's time.",
-].join(' ')
-
 const TOOLING_SYSTEM_PROMPT = [
   'You are a helpful assistant with access to tools.',
   "When the user asks for today's date, the current date, or what date it is, ALWAYS call the date_today tool and answer using its result.",
@@ -25,11 +15,12 @@ const TOOLING_SYSTEM_PROMPT = [
 
 export function getSystemPromptForModel(model) {
   const modelName = String(model || '').toLowerCase()
-  const useRobianPersona = modelName === 'robian' || modelName.startsWith('robian:')
+  const isRobian = modelName === 'robian' || modelName.startsWith('robian:')
 
-  return useRobianPersona
-    ? `${ROBIAN_PERSONA_PROMPT}\n\n${TOOLING_SYSTEM_PROMPT}`
-    : TOOLING_SYSTEM_PROMPT
+  // Ollama models created via Modelfile can have their own SYSTEM prompt.
+  // In the OpenAI-compatible API, sending any `system` message can replace that.
+  // So for Robian, we avoid a system message and rely on tool descriptions + model SYSTEM.
+  return isRobian ? '' : TOOLING_SYSTEM_PROMPT
 }
 
 export const SYSTEM_PROMPT = TOOLING_SYSTEM_PROMPT

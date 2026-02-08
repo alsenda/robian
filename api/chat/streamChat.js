@@ -14,12 +14,10 @@ export async function* streamChatWithTools({
 }) {
   const serverTools = [fetchUrlTool, searchWebTool, dateTodayTool]
 
-  const system = {
-    role: 'system',
-    content: getSystemPromptForModel(model),
-  }
-
-  const conversation = [system, ...openAiMessages]
+  const systemContent = getSystemPromptForModel(model)
+  const conversation = systemContent
+    ? [{ role: 'system', content: systemContent }, ...openAiMessages]
+    : [...openAiMessages]
 
   for (let iteration = 0; iteration < 3; iteration++) {
     if (abortSignal?.aborted) return

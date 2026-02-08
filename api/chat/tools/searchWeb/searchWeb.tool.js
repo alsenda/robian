@@ -5,7 +5,7 @@ import { searchWebBrave } from './searchWeb.js'
 export const searchWebDef = toolDefinition({
   name: 'search_web',
   description:
-    'Search the public web for relevant results. Use this for lookup questions when you need current information. After selecting promising results, use fetch_url to read pages before answering.',
+    'Search the public web for relevant results. Use this for factual lookups that require external information not present in the conversation. Prefer sources that are likely fetchable as public HTML; avoid JS-heavy or bot-blocked sites (Twitter/X, Facebook, Medium, LinkedIn). After selecting promising results, use fetch_url to read pages before answering unless snippets are clearly sufficient.',
   inputSchema: z.object({
     query: z.string().min(2).describe('Search query text'),
     count: z
