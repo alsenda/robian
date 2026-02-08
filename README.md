@@ -17,8 +17,8 @@ A lightweight AI chat application built with Preact and TanStack AI.
    npm install
    ```
 
-2. **Set your OpenAI API key**
-   
+2. **Configure Ollama (required)**
+
    This app uses a locally running Ollama server.
 
    Make sure Ollama is running and you have a model pulled (e.g. `robian:latest`).
@@ -29,7 +29,22 @@ A lightweight AI chat application built with Preact and TanStack AI.
    OLLAMA_MODEL=robian:latest
    ```
 
-3. **Start the development server**
+3. **Configure web search (optional)**
+
+   The `search_web` tool is enabled by default and uses DuckDuckGo HTML (no API key).
+
+   To switch providers, set:
+   ```
+   WEB_SEARCH_PROVIDER=duckduckgo
+   ```
+
+   Or to use Brave Search instead:
+   ```
+   WEB_SEARCH_PROVIDER=brave
+   BRAVE_SEARCH_API_KEY=your_key_here
+   ```
+
+4. **Start the development server**
    
    In one terminal, start the Vite dev server:
    ```bash
@@ -41,7 +56,7 @@ A lightweight AI chat application built with Preact and TanStack AI.
    npm run dev:server
    ```
 
-4. **Open the app**
+5. **Open the app**
    
    Navigate to `http://localhost:5173` (or the port shown by Vite)
 

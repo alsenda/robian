@@ -1,6 +1,6 @@
 import { toolDefinition } from '@tanstack/ai'
 import { z } from 'zod'
-import { searchWebBrave } from './searchWeb.js'
+import { searchWeb } from './searchWeb.js'
 
 export const searchWebDef = toolDefinition({
   name: 'search_web',
@@ -34,7 +34,7 @@ export const searchWebDef = toolDefinition({
 })
 
 export const searchWebTool = searchWebDef.server(async ({ query, count }) => {
-  const out = await searchWebBrave({ query, count })
+  const out = await searchWeb({ query, count })
   if (Array.isArray(out)) {
     return { query, results: out }
   }
