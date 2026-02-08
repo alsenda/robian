@@ -38,6 +38,16 @@ export interface RagQueryFilters {
 
 export interface RagQueryResultItem {
   id: RagDocId
+  /** Stable identifier for the retrieved chunk (alias of id). */
+  chunkId?: string
+  /** Original document id (before chunking). */
+  documentId?: string
+  /** Human-friendly source name (usually original filename). */
+  filename?: string
+  /** Best-effort page range. For non-paginated text, may default to 1-1. */
+  pageStart?: number
+  /** Best-effort page range. For non-paginated text, may default to 1-1. */
+  pageEnd?: number
   score: number
   source: RagSource
   sourceId: string

@@ -63,6 +63,16 @@ function safeJsonParseObject(value: unknown): Record<string, unknown> | undefine
   }
 }
 
+function getMetaNumber(meta: Record<string, unknown> | undefined, key: string): number | undefined {
+  const v = meta ? meta[key] : undefined
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.floor(v)
+  if (typeof v === 'string' && v.trim()) {
+    const n = Number(v)
+    if (Number.isFinite(n)) return Math.floor(n)
+  }
+  return undefined
+}
+
 function normalizeTopK(topK: unknown): number {
   const n = typeof topK === 'number' ? topK : 5
   if (!Number.isFinite(n) || n <= 0) return 5
@@ -146,6 +156,7 @@ export function createSqliteRagService({
 
         type Scored = {
           id: string
+          docId: string
           score: number
           source: 'upload'
           sourceId: string
@@ -169,6 +180,7 @@ export function createSqliteRagService({
 
           scored.push({
             id: row.id,
+            docId: row.docId,
             score,
             source: row.source,
             sourceId: row.sourceId,
@@ -179,15 +191,31 @@ export function createSqliteRagService({
         }
 
         scored.sort((a, b) => b.score - a.score)
-        const results = scored.slice(0, k).map((s) => ({
-          id: s.id,
-          score: s.score,
-          source: s.source,
-          sourceId: s.sourceId,
-          ...(s.title ? { title: s.title } : {}),
-          excerpt: s.text.slice(0, excerptChars),
-          ...(s.meta ? { meta: s.meta } : {}),
-        }))
+        const results = scored.slice(0, k).map((s) => {
+          const pageStart = getMetaNumber(s.meta, 'pageStart') ?? 1
+          const pageEnd = getMetaNumber(s.meta, 'pageEnd') ?? pageStart
+          const filename =
+            (typeof s.title === 'string' && s.title.trim() ? s.title.trim() : undefined) ||
+            (typeof s.meta?.filename === 'string' && String(s.meta.filename).trim()
+              ? String(s.meta.filename).trim()
+              : undefined) ||
+            s.sourceId
+
+          return {
+            id: s.id,
+            chunkId: s.id,
+            documentId: s.docId,
+            filename,
+            pageStart,
+            pageEnd,
+            score: s.score,
+            source: s.source,
+            sourceId: s.sourceId,
+            ...(s.title ? { title: s.title } : {}),
+            excerpt: s.text.slice(0, excerptChars),
+            ...(s.meta ? { meta: s.meta } : {}),
+          }
+        })
 
         return { ok: true, query: q, results }
       } catch (error: unknown) {
