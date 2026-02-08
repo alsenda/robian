@@ -55,12 +55,23 @@ export interface RagQueryResultItem {
   title?: string;
   excerpt?: string;
   meta?: Record<string, unknown>;
+
+  /** Optional lexical debug signal for hybrid search. */
+  matchCount?: number;
+  /** Subset of query terms found in the chunk (lowercased tokens). */
+  matchedTerms?: string[];
+  /** True if all query terms were found in the chunk. */
+  hasAllTerms?: boolean;
+  /** 1 when the full query phrase appears in the chunk (case-insensitive). */
+  phraseBoost?: number;
 }
 
 export interface RagQueryResult {
   ok: boolean;
   query: string;
   results: RagQueryResultItem[];
+  /** True when the best result has no lexical matches (used for retry heuristics). */
+  weak?: boolean;
   error?: RagError;
 }
 

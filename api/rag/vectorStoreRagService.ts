@@ -54,6 +54,58 @@ function asDocIdsFilter(filters?: RagQueryFilters): string[] | undefined {
   return [sourceId];
 }
 
+function tokenizeQuery(query: string): string[] {
+  const q = String(query ?? "").toLowerCase();
+  const normalized = q.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  if (!normalized) { return []; }
+
+  const parts = normalized.split(/\s+/g);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of parts) {
+    const t = p.trim();
+    if (t.length < 3) { continue; }
+    if (seen.has(t)) { continue; }
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
+}
+
+function tokenizeText(text: string): Set<string> {
+  const s = String(text ?? "").toLowerCase();
+  const normalized = s.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const set = new Set<string>();
+  if (!normalized) { return set; }
+  for (const p of normalized.split(/\s+/g)) {
+    const t = p.trim();
+    if (t.length < 3) { continue; }
+    set.add(t);
+  }
+  return set;
+}
+
+function lexSignals(query: string, queryTokens: string[], chunkText: string): {
+  matchCount: number;
+  matchedTerms: string[];
+  hasAllTerms: boolean;
+  phraseBoost: number;
+} {
+  const qLower = String(query ?? "").toLowerCase().trim();
+  const textLower = String(chunkText ?? "").toLowerCase();
+  const phraseBoost = qLower && textLower.includes(qLower) ? 1 : 0;
+
+  if (!queryTokens.length) {
+    return { matchCount: 0, matchedTerms: [], hasAllTerms: false, phraseBoost };
+  }
+
+  const tokenSet = tokenizeText(chunkText);
+  const matchedTerms = queryTokens.filter((t) => tokenSet.has(t));
+  const matchCount = matchedTerms.length;
+  const hasAllTerms = matchCount === queryTokens.length;
+  return { matchCount, matchedTerms, hasAllTerms, phraseBoost };
+}
+
 export function createVectorStoreRagService(): RagService {
   // Ensure DB is initialized early so DEBUG_RAG_DB can show counts.
   initDb();
@@ -148,29 +200,68 @@ export function createVectorStoreRagService(): RagService {
         const queryVec = await embedQuery(q);
         const docIds = asDocIdsFilter(filters);
 
+        const candidateK = Math.max(k, Math.min(200, k * 5));
+
         const chunks = vectorSearch(queryVec, {
           userId: "local",
-          topK: k,
+          topK: candidateK,
           ...(docIds && docIds.length ? { docIds } : {}),
         });
 
-        const results: RagQueryResultItem[] = chunks.map((c) => ({
-          id: c.chunkId,
-          chunkId: c.chunkId,
-          documentId: c.documentId,
-          filename: c.filename,
-          pageStart: c.pageStart ?? 1,
-          pageEnd: c.pageEnd ?? (c.pageStart ?? 1),
-          score: c.score,
+        const queryTokens = tokenizeQuery(q);
+        const enriched = chunks.map((c) => {
+          const s = queryTokens.length ? lexSignals(q, queryTokens, c.content) : null;
+          return {
+            chunk: c,
+            matchCount: s?.matchCount ?? 0,
+            matchedTerms: s?.matchedTerms ?? [],
+            hasAllTerms: s?.hasAllTerms ?? false,
+            phraseBoost: s?.phraseBoost ?? 0,
+          };
+        });
+
+        const anyLexMatch = queryTokens.length
+          ? enriched.some((e) => e.matchCount > 0)
+          : false;
+
+        let ordered = enriched;
+        if (queryTokens.length && anyLexMatch) {
+          ordered = [...enriched].sort((a, b) => {
+            if (a.hasAllTerms !== b.hasAllTerms) { return a.hasAllTerms ? -1 : 1; }
+            if (a.matchCount !== b.matchCount) { return b.matchCount - a.matchCount; }
+            if (a.phraseBoost !== b.phraseBoost) { return b.phraseBoost - a.phraseBoost; }
+            return (b.chunk.score ?? 0) - (a.chunk.score ?? 0);
+          });
+        }
+
+        const top = ordered.slice(0, k);
+        const weak = queryTokens.length ? (top[0]?.matchCount ?? 0) === 0 : undefined;
+
+        const results: RagQueryResultItem[] = top.map((e) => ({
+          id: e.chunk.chunkId,
+          chunkId: e.chunk.chunkId,
+          documentId: e.chunk.documentId,
+          filename: e.chunk.filename,
+          pageStart: e.chunk.pageStart ?? 1,
+          pageEnd: e.chunk.pageEnd ?? (e.chunk.pageStart ?? 1),
+          score: e.chunk.score,
           source: "upload",
-          sourceId: c.documentId,
-          excerpt: excerpt(c.content, 240),
+          sourceId: e.chunk.documentId,
+          excerpt: excerpt(e.chunk.content, 240),
           meta: {
-            filename: c.filename,
+            filename: e.chunk.filename,
           },
+          ...(queryTokens.length
+            ? {
+                matchCount: e.matchCount,
+                matchedTerms: e.matchedTerms,
+                hasAllTerms: e.hasAllTerms,
+                phraseBoost: e.phraseBoost,
+              }
+            : {}),
         }));
 
-        return { ok: true, query: q, results };
+        return { ok: true, query: q, results, ...(weak !== undefined ? { weak } : {}) };
       } catch (error: unknown) {
         return { ok: false, query: q, results: [], error: toRagError(error) };
       }
