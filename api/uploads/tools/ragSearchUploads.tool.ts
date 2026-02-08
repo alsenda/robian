@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RagService } from '../../rag/types.js'
+import type { RagService } from '../../rag/types.ts'
 
 export const ragSearchUploadsDef = {
   name: 'rag_search_uploads',

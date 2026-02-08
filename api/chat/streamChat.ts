@@ -1,6 +1,6 @@
-import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
-import { streamOllamaChatCompletionsOnce } from './ollama/client.js'
-import { createChatCompletionsStreamParser } from './ollama/streamParser.js'
+import { getPromptPrefixMessagesForModel } from './systemPrompt.ts'
+import { streamOllamaChatCompletionsOnce } from './ollama/client.ts'
+import { createChatCompletionsStreamParser } from './ollama/streamParser.ts'
 
 export type ServerTool = {
   name: string
@@ -41,7 +41,7 @@ export async function* streamChatWithTools({
           chatCompletionsMessages: conversation,
           tools,
           requestId,
-          abortSignal,
+          ...(abortSignal ? { abortSignal } : {}),
         })
       } catch (error: unknown) {
         if (abortSignal?.aborted) return
@@ -79,7 +79,7 @@ export async function* streamChatWithTools({
     const { state, parse } = createChatCompletionsStreamParser({
       requestId,
       model,
-      abortSignal,
+      ...(abortSignal ? { abortSignal } : {}),
     })
 
     try {

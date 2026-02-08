@@ -1,11 +1,38 @@
-import { assertPublicHostname } from '../../security/ssrf.js'
-import { stripHtmlToText } from '../../utils/html.js'
+import { assertPublicHostname } from '../../security/ssrf.ts'
+import { stripHtmlToText } from '../../utils/html.ts'
 
 // A realistic User-Agent reduces trivial bot blocks without changing architecture.
 const REALISTIC_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
-export async function fetchTextFromUrl({ url, timeoutMs = 12_000, maxBytes = 1_000_000 }) {
+type FetchTextOk = {
+  ok: true
+  url: string
+  status: number
+  contentType: string
+  text: string
+  truncated: boolean
+}
+
+type FetchTextErr = {
+  ok: false
+  url: string
+  status: number
+  contentType: string
+  text: string
+  truncated: boolean
+  error: { kind?: string; message: string }
+}
+
+export async function fetchTextFromUrl({
+  url,
+  timeoutMs = 12_000,
+  maxBytes = 1_000_000,
+}: {
+  url: string
+  timeoutMs?: number
+  maxBytes?: number
+}): Promise<FetchTextOk | FetchTextErr> {
   // Returns structured results so fetch_url can treat failures as soft.
   let current = new URL(url)
   if (current.protocol !== 'http:' && current.protocol !== 'https:') {
@@ -24,7 +51,7 @@ export async function fetchTextFromUrl({ url, timeoutMs = 12_000, maxBytes = 1_0
   const timeout = setTimeout(() => abortController.abort(), timeoutMs)
   try {
     // Follow redirects manually so SSRF protections are applied to every hop.
-    let response
+    let response: Response | undefined
     const maxRedirects = 5
     for (let redirects = 0; redirects <= maxRedirects; redirects++) {
       await assertPublicHostname(current.hostname)
@@ -152,7 +179,7 @@ export async function fetchTextFromUrl({ url, timeoutMs = 12_000, maxBytes = 1_0
       }
     }
 
-    const chunks = []
+    const chunks: Uint8Array[] = []
     let received = 0
     let truncated = false
     try {

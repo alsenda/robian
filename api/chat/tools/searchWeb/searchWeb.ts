@@ -1,10 +1,10 @@
-import { normalizeAndValidateCandidateUrl } from '../../security/urlFilters.js'
+import { normalizeAndValidateCandidateUrl } from '../../security/urlFilters.ts'
 
 // A realistic User-Agent reduces trivial bot blocks without changing architecture.
 const REALISTIC_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
-function decodeHtmlEntities(text) {
+function decodeHtmlEntities(text: string): string {
   const input = String(text || '')
   if (!input.includes('&')) return input
   return input
@@ -33,7 +33,7 @@ function decodeHtmlEntities(text) {
     })
 }
 
-function stripTags(html) {
+function stripTags(html: string): string {
   return String(html || '')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -42,7 +42,7 @@ function stripTags(html) {
     .trim()
 }
 
-function resolveDuckDuckGoHref(href) {
+function resolveDuckDuckGoHref(href: string): string {
   try {
     const url = new URL(String(href || ''), 'https://duckduckgo.com')
     const host = url.hostname.toLowerCase()
@@ -56,7 +56,7 @@ function resolveDuckDuckGoHref(href) {
   }
 }
 
-function normalizeProviderName(name) {
+function normalizeProviderName(name: unknown): string {
   const v = String(name || '').trim().toLowerCase()
   if (!v) return 'duckduckgo'
   if (v === 'ddg' || v === 'duckduckgo' || v === 'duck-duck-go') return 'duckduckgo'
@@ -64,18 +64,36 @@ function normalizeProviderName(name) {
   return v
 }
 
-export function getWebSearchProvider() {
+export function getWebSearchProvider(): string {
   return normalizeProviderName(process.env.WEB_SEARCH_PROVIDER)
 }
 
-export async function searchWeb({ query, count = 5, timeoutMs = 12_000 }) {
+export type WebSearchResult = { title: string; url: string; snippet: string }
+
+export async function searchWeb({
+  query,
+  count = 5,
+  timeoutMs = 12_000,
+}: {
+  query: string
+  count?: number
+  timeoutMs?: number
+}): Promise<WebSearchResult[] | { ok: boolean; results: WebSearchResult[]; error?: { message: string } }> {
   const provider = getWebSearchProvider()
   if (provider === 'brave') return searchWebBrave({ query, count, timeoutMs })
   // Default: DuckDuckGo HTML (no API key required).
   return searchWebDuckDuckGo({ query, count, timeoutMs })
 }
 
-export async function searchWebDuckDuckGo({ query, count = 5, timeoutMs = 12_000 }) {
+export async function searchWebDuckDuckGo({
+  query,
+  count = 5,
+  timeoutMs = 12_000,
+}: {
+  query: string
+  count?: number
+  timeoutMs?: number
+}): Promise<{ ok: boolean; results: WebSearchResult[]; error?: { message: string } }> {
   const requested = Math.max(1, Math.min(10, Number(count) || 5))
 
   const url = new URL('https://html.duckduckgo.com/html/')
@@ -103,12 +121,13 @@ export async function searchWebDuckDuckGo({ query, count = 5, timeoutMs = 12_000
     }
 
     const html = await response.text()
-    const results = []
-    const seen = new Set()
+    const results: WebSearchResult[] = []
+    const seen = new Set<string>()
 
     // DuckDuckGo HTML results are fairly stable: anchors with class result__a.
-    const anchorRe = /<a\s+[^>]*class=(?:"[^"]*\bresult__a\b[^"]*"|'[^']*\bresult__a\b[^']*')[^>]*href=(?:"([^"]+)"|'([^']+)')[^>]*>([\s\S]*?)<\/a>/gi
-    let match
+    const anchorRe =
+      /<a\s+[^>]*class=(?:"[^"]*\bresult__a\b[^"]*"|'[^']*\bresult__a\b[^']*')[^>]*href=(?:"([^"]+)"|'([^']+)')[^>]*>([\s\S]*?)<\/a>/gi
+    let match: RegExpExecArray | null
     while ((match = anchorRe.exec(html))) {
       const href = match[1] || match[2] || ''
       const titleHtml = match[3] || ''
@@ -132,7 +151,7 @@ export async function searchWebDuckDuckGo({ query, count = 5, timeoutMs = 12_000
     }
 
     return { ok: true, results }
-  } catch (error) {
+  } catch {
     if (abortController.signal.aborted) {
       return { ok: false, results: [], error: { message: 'Search request timed out' } }
     }
@@ -142,7 +161,15 @@ export async function searchWebDuckDuckGo({ query, count = 5, timeoutMs = 12_000
   }
 }
 
-export async function searchWebBrave({ query, count = 5, timeoutMs = 12_000 }) {
+export async function searchWebBrave({
+  query,
+  count = 5,
+  timeoutMs = 12_000,
+}: {
+  query: string
+  count?: number
+  timeoutMs?: number
+}): Promise<{ ok: boolean; results: WebSearchResult[]; error?: { message: string } }> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY
   if (!apiKey) {
     // Soft-fail so the model can proceed without search.
@@ -179,11 +206,11 @@ export async function searchWebBrave({ query, count = 5, timeoutMs = 12_000 }) {
       }
     }
 
-    const data = await response.json()
+    const data: any = await response.json()
     const rawResults = data?.web?.results
-    if (!Array.isArray(rawResults)) return []
+    if (!Array.isArray(rawResults)) return { ok: true, results: [] }
 
-    const results = rawResults
+    const results = (rawResults as any[])
       .map((r) => {
         const title = typeof r?.title === 'string' ? r.title.trim() : ''
         const urlText = typeof r?.url === 'string' ? r.url.trim() : ''
@@ -201,8 +228,8 @@ export async function searchWebBrave({ query, count = 5, timeoutMs = 12_000 }) {
       .filter((r) => r.title && r.url)
 
     // De-dupe while keeping ordering.
-    const seen = new Set()
-    const deduped = []
+    const seen = new Set<string>()
+    const deduped: WebSearchResult[] = []
     for (const r of results) {
       if (seen.has(r.url)) continue
       seen.add(r.url)

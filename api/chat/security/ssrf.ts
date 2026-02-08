@@ -1,7 +1,7 @@
 import dns from 'node:dns/promises'
 import net from 'node:net'
 
-export function isPrivateIp(ip) {
+export function isPrivateIp(ip: string): boolean {
   const version = net.isIP(ip)
   if (!version) return false
 
@@ -13,7 +13,9 @@ export function isPrivateIp(ip) {
     return false
   }
 
-  const [a, b] = ip.split('.').map((n) => Number(n))
+  const parts = ip.split('.').map((n) => Number(n))
+  const a = parts[0] ?? Number.NaN
+  const b = parts[1] ?? Number.NaN
   if (a === 127) return true
   if (a === 10) return true
   if (a === 0) return true
@@ -23,7 +25,7 @@ export function isPrivateIp(ip) {
   return false
 }
 
-export async function assertPublicHostname(hostname) {
+export async function assertPublicHostname(hostname: string): Promise<void> {
   const clean = hostname.replace(/\.$/, '')
   if (!clean) throw new Error('Invalid hostname')
 

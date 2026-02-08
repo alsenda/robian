@@ -1,6 +1,6 @@
 import { toolDefinition } from '@tanstack/ai'
 import { z } from 'zod'
-import { fetchTextFromUrl } from './fetchUrl.js'
+import { fetchTextFromUrl } from './fetchUrl.ts'
 
 export const fetchUrlDef = toolDefinition({
   name: 'fetch_url',
@@ -36,11 +36,11 @@ export const fetchUrlTool = fetchUrlDef.server(async ({ url, maxChars }) => {
   const result = await fetchTextFromUrl({ url })
   const limit = typeof maxChars === 'number' ? maxChars : 8_000
   return {
-    ok: Boolean(result.ok),
-    url: result.url,
-    status: result.status,
-    content: (result.text || '').slice(0, limit),
-    truncated: Boolean(result.truncated),
-    error: result.ok ? undefined : result.error,
+    ok: Boolean((result as any).ok),
+    url: (result as any).url,
+    status: (result as any).status,
+    content: (String((result as any).text || '')).slice(0, limit),
+    truncated: Boolean((result as any).truncated),
+    error: (result as any).ok ? undefined : (result as any).error,
   }
 })

@@ -14,7 +14,7 @@ const TOOLING_GUIDANCE = [
   'Never use web tools for current time or date; use date_today.',
 ].join(' ')
 
-export function getPromptPrefixMessagesForModel(model) {
+export function getPromptPrefixMessagesForModel(model: string): Array<{ role: string; content: string }> {
   const modelName = String(model || '').toLowerCase()
   const isRobian = modelName === 'robian' || modelName.startsWith('robian:')
 

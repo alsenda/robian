@@ -1,6 +1,6 @@
 import { toolDefinition } from '@tanstack/ai'
 import { z } from 'zod'
-import { searchWeb } from './searchWeb.js'
+import { searchWeb } from './searchWeb.ts'
 
 export const searchWebDef = toolDefinition({
   name: 'search_web',
@@ -34,14 +34,14 @@ export const searchWebDef = toolDefinition({
 })
 
 export const searchWebTool = searchWebDef.server(async ({ query, count }) => {
-  const out = await searchWeb({ query, count })
+  const out = await searchWeb(typeof count === 'number' ? { query, count } : { query })
   if (Array.isArray(out)) {
     return { query, results: out }
   }
 
   return {
     query,
-    results: out?.results || [],
-    error: out?.ok === false ? out?.error : undefined,
+    results: (out as any)?.results || [],
+    error: (out as any)?.ok === false ? (out as any)?.error : undefined,
   }
 })

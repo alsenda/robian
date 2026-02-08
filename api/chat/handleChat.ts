@@ -6,8 +6,8 @@ import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import type { Request, Response as ExpressResponse } from 'express'
 
-import { getPromptPrefixMessagesForModel } from './systemPrompt.js'
-import { toChatCompletionsMessages } from './utils/messages.js'
+import { getPromptPrefixMessagesForModel } from './systemPrompt.ts'
+import { toChatCompletionsMessages } from './utils/messages.ts'
 import {
   dateTodayDef,
   fetchUrlDef,
@@ -18,10 +18,10 @@ import {
   toChatCompletionsTools,
   createServerTools,
 } from './tools/index.ts'
-import { streamOllamaChatCompletionsOnce } from './ollama/client.js'
+import { streamOllamaChatCompletionsOnce } from './ollama/client.ts'
 import { streamChatWithTools } from './streamChat.ts'
-import type { RagService } from '../rag/types.js'
-import { createRagService } from '../rag/index.js'
+import type { RagService } from '../rag/types.ts'
+import { createRagService } from '../rag/index.ts'
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 const DEFAULT_OLLAMA_MODEL = 'robian:latest'

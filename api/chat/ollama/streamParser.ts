@@ -1,14 +1,34 @@
 import { randomUUID } from 'node:crypto'
 
-export function createChatCompletionsStreamParser({ requestId, model, abortSignal }) {
-  const state = {
+type ToolCallAccum = { id: string; name: string; arguments: string }
+
+type ParserState = {
+  fullContent: string
+  finishReason: string
+  toolCallsByIndex: Map<number, ToolCallAccum>
+  resolvedModel: string
+}
+
+export function createChatCompletionsStreamParser({
+  requestId,
+  model,
+  abortSignal,
+}: {
+  requestId: string
+  model: string
+  abortSignal?: AbortSignal
+}): {
+  state: ParserState
+  parse: (args: { response: Response }) => AsyncGenerator<unknown, void, void>
+} {
+  const state: ParserState = {
     fullContent: '',
     finishReason: 'stop',
     toolCallsByIndex: new Map(),
     resolvedModel: model,
   }
 
-  const parse = async function* ({ response }) {
+  const parse = async function* ({ response }: { response: Response }) {
     const decoder = new TextDecoder()
     const reader = response.body?.getReader()
     if (!reader) {
@@ -33,7 +53,7 @@ export function createChatCompletionsStreamParser({ requestId, model, abortSigna
           if (!payload) continue
           if (payload === '[DONE]') return
 
-          let parsed
+          let parsed: any
           try {
             parsed = JSON.parse(payload)
           } catch {
@@ -71,7 +91,7 @@ export function createChatCompletionsStreamParser({ requestId, model, abortSigna
               const toolDelta = toolDeltas[i]
               const index = typeof toolDelta?.index === 'number' ? toolDelta.index : i
 
-              const existing = state.toolCallsByIndex.get(index) || {
+              const existing: ToolCallAccum = state.toolCallsByIndex.get(index) || {
                 id: toolDelta?.id || randomUUID(),
                 name: toolDelta?.function?.name || '',
                 arguments: '',
@@ -80,29 +100,23 @@ export function createChatCompletionsStreamParser({ requestId, model, abortSigna
               if (typeof toolDelta?.id === 'string' && toolDelta.id) {
                 existing.id = toolDelta.id
               }
+
               // Support streamed tool_calls deltas as well as provider variants that use
               // { name, parameters } or legacy function_call shapes.
               const functionPayload =
-                toolDelta?.function && typeof toolDelta.function === 'object'
-                  ? toolDelta.function
-                  : toolDelta
+                toolDelta?.function && typeof toolDelta.function === 'object' ? toolDelta.function : toolDelta
 
               if (typeof functionPayload?.name === 'string' && functionPayload.name) {
                 existing.name = functionPayload.name
               }
 
-              let argsDelta =
-                typeof functionPayload?.arguments === 'string' ? functionPayload.arguments : ''
+              let argsDelta = typeof functionPayload?.arguments === 'string' ? functionPayload.arguments : ''
 
               if (!argsDelta && typeof functionPayload?.parameters === 'string') {
                 argsDelta = functionPayload.parameters
               }
 
-              if (
-                !argsDelta &&
-                functionPayload?.parameters &&
-                typeof functionPayload.parameters === 'object'
-              ) {
+              if (!argsDelta && functionPayload?.parameters && typeof functionPayload.parameters === 'object') {
                 // Some providers send parameters as an object (not a streamed JSON string).
                 if (!existing.arguments) {
                   existing.arguments = JSON.stringify(functionPayload.parameters)
@@ -133,7 +147,7 @@ export function createChatCompletionsStreamParser({ requestId, model, abortSigna
           const legacyFn = delta?.function_call
           if (legacyFn && typeof legacyFn === 'object') {
             const index = 0
-            const existing = state.toolCallsByIndex.get(index) || {
+            const existing: ToolCallAccum = state.toolCallsByIndex.get(index) || {
               id: randomUUID(),
               name: '',
               arguments: '',

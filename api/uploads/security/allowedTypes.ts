@@ -1,5 +1,3 @@
-// @ts-check
-
 /**
  * Default allowed extensions. Override via UPLOAD_ALLOWED_EXTS="pdf,txt,..."
  */
@@ -13,19 +11,20 @@ export const DEFAULT_ALLOWED_EXTS = [
   'xlsx',
   'doc',
   'docx',
-]
+] as const
 
-export function getAllowedExtensions() {
+export function getAllowedExtensions(): string[] {
   const raw = process.env.UPLOAD_ALLOWED_EXTS
-  if (!raw) return DEFAULT_ALLOWED_EXTS
+  if (!raw) return [...DEFAULT_ALLOWED_EXTS]
+
   const exts = raw
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
-  return exts.length ? exts : DEFAULT_ALLOWED_EXTS
+
+  return exts.length ? exts : [...DEFAULT_ALLOWED_EXTS]
 }
 
-/** @param {string} ext */
-export function isTextLikeExtension(ext) {
+export function isTextLikeExtension(ext: string): boolean {
   return ['txt', 'md', 'csv', 'json'].includes(String(ext || '').toLowerCase())
 }

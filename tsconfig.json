@@ -14,8 +14,6 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "types": ["node", "vitest"]
   },
   "include": [

@@ -37,7 +37,7 @@ describe('uploads tools (TS)', () => {
   })
 
   it('list_uploads returns entries', async () => {
-    const { addManifestEntry } = await import('../../uploads/db/manifest.js')
+    const { addManifestEntry } = await import('../../uploads/db/manifest.ts')
     const { listUploadsTool } = await import('../../chat/tools/index.ts')
 
     await addManifestEntry({
@@ -59,7 +59,7 @@ describe('uploads tools (TS)', () => {
   })
 
   it('get_upload returns previewText for txt', async () => {
-    const { addManifestEntry } = await import('../../uploads/db/manifest.js')
+    const { addManifestEntry } = await import('../../uploads/db/manifest.ts')
     const { getUploadTool } = await import('../../chat/tools/index.ts')
 
     await addManifestEntry({

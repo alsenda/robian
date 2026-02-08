@@ -35,7 +35,7 @@ describe('uploads HTTP API (TS)', () => {
   afterEach(async () => {
     process.env = originalEnv
     await rmDirSafe(uploadsDir)
-    vi.unmock('../../rag/index.js')
+    vi.unmock('../../rag/index.ts')
   })
 
   it('rejects disallowed types', async () => {
@@ -173,8 +173,8 @@ describe('uploads HTTP API (TS)', () => {
       },
     }))
 
-    vi.doMock('../../rag/index.js', async () => {
-      const actual = await vi.importActual<typeof import('../../rag/index.js')>('../../rag/index.js')
+    vi.doMock('../../rag/index.ts', async () => {
+      const actual = await vi.importActual<typeof import('../../rag/index.ts')>('../../rag/index.ts')
       return {
         ...actual,
         createRagService: vi.fn(() => ({ upsertDocuments, deleteDocuments, query })),

@@ -1,5 +1,5 @@
 import net from 'node:net'
-import { isPrivateIp } from './ssrf.js'
+import { isPrivateIp } from './ssrf.ts'
 
 // Filter out domains that are commonly bot-blocked, JS-heavy, or hostile to scraping.
 // This keeps search_web results actionable and avoids wasted fetch_url calls.
@@ -40,17 +40,17 @@ const NON_HTML_EXTENSIONS = new Set([
   '.svg',
 ])
 
-export function normalizeHostname(hostname) {
+export function normalizeHostname(hostname: string): string {
   return String(hostname || '').trim().toLowerCase().replace(/\.$/, '')
 }
 
-export function isHostileDomain(hostname) {
+export function isHostileDomain(hostname: string): boolean {
   const host = normalizeHostname(hostname)
   if (!host) return true
   return HOSTILE_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
 }
 
-export function looksLikeNonHtmlPath(pathname) {
+export function looksLikeNonHtmlPath(pathname: string): boolean {
   const path = String(pathname || '').toLowerCase()
   const lastDot = path.lastIndexOf('.')
   if (lastDot === -1) return false
@@ -58,7 +58,7 @@ export function looksLikeNonHtmlPath(pathname) {
   return NON_HTML_EXTENSIONS.has(ext)
 }
 
-export function normalizeAndValidateCandidateUrl(urlText) {
+export function normalizeAndValidateCandidateUrl(urlText: string): string | null {
   try {
     const parsed = new URL(String(urlText || '').trim())
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null

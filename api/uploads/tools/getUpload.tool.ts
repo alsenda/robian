@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getManifestEntry } from '../db/manifest.js'
+import { getManifestEntry } from '../db/manifest.ts'
 
 export const getUploadDef = {
   name: 'get_upload',
@@ -10,14 +10,20 @@ export const getUploadDef = {
 
 export const getUploadTool = {
   ...getUploadDef,
-  async execute(input) {
-    const id = String(input?.id || '')
-    const entry = await getManifestEntry(id)
+  async execute(input: unknown): Promise<unknown> {
+    const parsed = getUploadDef.inputSchema.safeParse(input)
+    if (!parsed.success) {
+      return { ok: false, error: { message: 'Invalid input' } }
+    }
+
+    const { id, maxChars } = parsed.data
+    const entry = await getManifestEntry(String(id))
     if (!entry) {
       return { ok: false, error: { message: 'Upload not found' } }
     }
-    const maxChars = input?.maxChars ? Math.min(20000, input.maxChars) : 20000
-    const previewText = entry.previewText ? String(entry.previewText).slice(0, maxChars) : ''
+
+    const limit = typeof maxChars === 'number' ? Math.min(20_000, maxChars) : 20_000
+    const previewText = entry.previewText ? String(entry.previewText).slice(0, limit) : ''
     return { ok: true, upload: entry, previewText }
   },
 }

@@ -2,19 +2,19 @@ import express from 'express'
 import multer from 'multer'
 import { randomUUID } from 'node:crypto'
 
-import { validateUploadOrThrow, sanitizeFilename, getMaxBytes } from './security/validateUpload.js'
-import { detectType } from './parsing/detectType.js'
-import { extractPreviewText } from './parsing/textExtract.stub.js'
-import { writeStoredFile, deleteStoredFile, createDownloadStream } from './storage/localStorage.js'
+import { validateUploadOrThrow, sanitizeFilename, getMaxBytes } from './security/validateUpload.ts'
+import { detectType } from './parsing/detectType.ts'
+import { extractPreviewText } from './parsing/textExtract.stub.ts'
+import { writeStoredFile, deleteStoredFile, createDownloadStream } from './storage/localStorage.ts'
 import {
   addManifestEntry,
   deleteManifestEntry,
   getManifestEntry,
   listManifestEntries,
-} from './db/manifest.js'
-import { isTextLikeExtension } from './security/allowedTypes.js'
+} from './db/manifest.ts'
+import { isTextLikeExtension } from './security/allowedTypes.ts'
 
-import type { RagService, RagDocumentInput } from '../rag/types.js'
+import type { RagService, RagDocumentInput } from '../rag/types.ts'
 
 export interface CreateUploadsRouterDeps {
   ragService: RagService

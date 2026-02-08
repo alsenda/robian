@@ -1,22 +1,22 @@
 import { convertZodToJsonSchema } from '@tanstack/ai'
 import type { ZodTypeAny } from 'zod'
 
-export { fetchUrlDef, fetchUrlTool } from './fetchUrl/fetchUrl.tool.js'
-export { searchWebDef, searchWebTool } from './searchWeb/searchWeb.tool.js'
-export { dateTodayDef, dateTodayTool } from './date/dateToday.tool.js'
+export { fetchUrlDef, fetchUrlTool } from './fetchUrl/fetchUrl.tool.ts'
+export { searchWebDef, searchWebTool } from './searchWeb/searchWeb.tool.ts'
+export { dateTodayDef, dateTodayTool } from './date/dateToday.tool.ts'
 
-import { fetchUrlTool } from './fetchUrl/fetchUrl.tool.js'
-import { searchWebTool } from './searchWeb/searchWeb.tool.js'
-import { dateTodayTool } from './date/dateToday.tool.js'
+import { fetchUrlTool } from './fetchUrl/fetchUrl.tool.ts'
+import { searchWebTool } from './searchWeb/searchWeb.tool.ts'
+import { dateTodayTool } from './date/dateToday.tool.ts'
 
-export { listUploadsDef, listUploadsTool } from '../../uploads/tools/listUploads.tool.js'
-export { getUploadDef, getUploadTool } from '../../uploads/tools/getUpload.tool.js'
+export { listUploadsDef, listUploadsTool } from '../../uploads/tools/listUploads.tool.ts'
+export { getUploadDef, getUploadTool } from '../../uploads/tools/getUpload.tool.ts'
 
-import { listUploadsTool } from '../../uploads/tools/listUploads.tool.js'
-import { getUploadTool } from '../../uploads/tools/getUpload.tool.js'
+import { listUploadsTool } from '../../uploads/tools/listUploads.tool.ts'
+import { getUploadTool } from '../../uploads/tools/getUpload.tool.ts'
 
 import { ragSearchUploadsDef, createRagSearchUploadsTool } from '../../uploads/tools/ragSearchUploads.tool.ts'
-import type { RagService } from '../../rag/types.js'
+import type { RagService } from '../../rag/types.ts'
 
 export { ragSearchUploadsDef }
 

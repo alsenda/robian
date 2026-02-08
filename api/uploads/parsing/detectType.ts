@@ -1,21 +1,23 @@
-// @ts-check
-
 import path from 'node:path'
 
 /**
  * Minimal detection helper.
  * We rely primarily on extension because browser-provided mimetypes are not reliable.
  */
-/** @param {{ originalName: string, mimeType?: string }} args */
-export function detectType({ originalName, mimeType }) {
+export function detectType({
+  originalName,
+  mimeType,
+}: {
+  originalName: string
+  mimeType?: string
+}): { extension: string; mimeType: string } {
   const safeName = path.basename(String(originalName || 'upload'))
   const ext = path.extname(safeName).replace('.', '').toLowerCase() || 'bin'
 
   // Normalize common mimetypes for known extensions
   const normalizedMime = String(mimeType || '').toLowerCase()
 
-  /** @type {Record<string, string>} */
-  const mimeByExt = {
+  const mimeByExt: Record<string, string> = {
     pdf: 'application/pdf',
     txt: 'text/plain',
     md: 'text/markdown',

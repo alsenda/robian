@@ -1,4 +1,4 @@
-export function stripHtmlToText(html) {
+export function stripHtmlToText(html: string): string {
   let text = String(html)
   text = text.replace(/<script[\s\S]*?<\/script>/gi, ' ')
   text = text.replace(/<style[\s\S]*?<\/style>/gi, ' ')

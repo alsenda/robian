@@ -1,13 +1,16 @@
-// @ts-check
+import { isTextLikeExtension } from '../security/allowedTypes.ts'
 
-import { isTextLikeExtension } from '../security/allowedTypes.js'
-
-/**
- * @param {{ buffer: Uint8Array | Buffer, extension: string, maxChars?: number }} args
- */
-export function extractPreviewText({ buffer, extension, maxChars }) {
+export function extractPreviewText({
+  buffer,
+  extension,
+  maxChars,
+}: {
+  buffer: Uint8Array | Buffer
+  extension: string
+  maxChars?: number
+}): { extractable: boolean; previewText: string } {
   const ext = String(extension || '').toLowerCase()
-  const max = typeof maxChars === 'number' ? maxChars : NaN
+  const max = typeof maxChars === 'number' ? maxChars : Number.NaN
   const limit = Number.isFinite(max) && max > 0 ? Math.floor(max) : 20_000
 
   if (!isTextLikeExtension(ext)) {
