@@ -1,7 +1,7 @@
 export function ChatHeader({ onRestart, view, onNavigate }) {
   return (
     <header className="sticky top-0 z-10 border-b-4 border-black bg-yellow-200">
-      <div className="flex items-center justify-between gap-4 py-4 px-4">
+      <div className="flex items-center justify-between gap-4 px-4">
         <div className="flex min-w-0 items-center gap-4">
           <img
             src="/robian-logo.png"
