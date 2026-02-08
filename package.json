@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx server.ts",
+    "lint": "tslint -p tsconfig.json -c tslint.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "vite build",
@@ -36,6 +37,7 @@
     "postcss": "^8.5.6",
     "supertest": "^7.1.1",
     "tailwindcss": "^4.1.18",
+    "tslint": "^5.20.1",
     "tsx": "^4.19.2",
     "typescript": "^5.8.2",
     "vite": "^5.0.0",
