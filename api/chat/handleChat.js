@@ -5,7 +5,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 
-import { SYSTEM_PROMPT } from './systemPrompt.js'
+import { getSystemPromptForModel } from './systemPrompt.js'
 import { toOpenAiMessages } from './utils/messages.js'
 import { dateTodayDef, fetchUrlDef, searchWebDef, toOpenAiTools } from './tools/index.js'
 import { streamOllamaOpenAiOnce } from './ollama/client.js'
@@ -46,6 +46,10 @@ export async function handleChat(req, res) {
     const model = process.env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL
     const requestId = randomUUID()
 
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`[chat] model: ${model}`)
+    }
+
     const modelMessages = convertMessagesToModelMessages(messages)
     const openAiMessages = toOpenAiMessages(modelMessages)
 
@@ -53,7 +57,7 @@ export async function handleChat(req, res) {
 
     const system = {
       role: 'system',
-      content: SYSTEM_PROMPT,
+      content: getSystemPromptForModel(model),
     }
 
     const firstConversation = [system, ...openAiMessages]

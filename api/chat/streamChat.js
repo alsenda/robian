@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from './systemPrompt.js'
+import { getSystemPromptForModel } from './systemPrompt.js'
 import { streamOllamaOpenAiOnce } from './ollama/client.js'
 import { createOpenAiStreamParser } from './ollama/streamParser.js'
 import { dateTodayTool, fetchUrlTool, searchWebTool } from './tools/index.js'
@@ -16,7 +16,7 @@ export async function* streamChatWithTools({
 
   const system = {
     role: 'system',
-    content: SYSTEM_PROMPT,
+    content: getSystemPromptForModel(model),
   }
 
   const conversation = [system, ...openAiMessages]
