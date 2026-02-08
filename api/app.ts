@@ -5,6 +5,7 @@ import { createHandleChat } from './chat/index.ts'
 import { createUploadsRouter } from './uploads/index.ts'
 import { createRagService } from './rag/index.ts'
 import { createRagHealthHandler } from './rag/health.ts'
+import { createRagIngestRouter } from './rag/ingest.ts'
 
 export function createApp(): express.Express {
   const app = express()
@@ -16,6 +17,9 @@ export function createApp(): express.Express {
 
   // RAG health/status endpoint (read-only)
   app.get('/api/rag/health', createRagHealthHandler())
+
+  // RAG ingestion (async)
+  app.use('/api/rag/ingest', createRagIngestRouter())
 
   // Chat endpoint (existing behavior)
   app.post('/api/chat', createHandleChat({ ragService }))
