@@ -35,7 +35,7 @@ export function ChatMessages({ messages, isLoading, error, messagesViewportRef, 
           }
         >
           <div className="text-[11px] font-black uppercase tracking-widest">
-            {message.role === 'user' ? 'You' : 'Robian'} - {message.tool_calls?.length ? 'Used tools' : 'AI Assistant'}
+            {message.role === 'user' ? 'You' : 'Robian'}
           </div>
           <div className="leading-6 [&_p+p]:mt-2 [&_ul]:ml-5 [&_ul]:list-disc [&_ul_ul]:mt-1 [&_li]:my-1">
             {(() => {
