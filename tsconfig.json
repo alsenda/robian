@@ -19,6 +19,7 @@
   "include": [
     "server.ts",
     "api/**/*.ts",
+    "src/server/**/*.ts",
     "api/__tests__/**/*.ts"
   ]
 }
