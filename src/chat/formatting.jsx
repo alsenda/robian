@@ -62,6 +62,23 @@ function renderInline(text) {
   return nodes
 }
 
+function normalizeFenceLang(rawLang) {
+  const s = String(rawLang ?? '').trim()
+  if (!s) return ''
+  // Accept things like "json|plaintext|whatever" (docs/examples) by taking the first segment.
+  return s.split('|')[0].trim().toLowerCase()
+}
+
+function tryPrettyJsonText(text) {
+  const s = String(text ?? '').trim()
+  if (!s) return ''
+  try {
+    return JSON.stringify(JSON.parse(s), null, 2)
+  } catch {
+    return text
+  }
+}
+
 export function renderFormattedText(rawText) {
   const text = (rawText ?? '').replace(/\r\n/g, '\n')
   if (!text) return ''
@@ -88,7 +105,8 @@ export function renderFormattedText(rawText) {
     listItems = null
   }
 
-  for (const originalLine of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const originalLine = lines[lineIndex]
     const line = originalLine.replace(/\s+$/, '')
 
     if (!line.trim()) {
@@ -98,6 +116,36 @@ export function renderFormattedText(rawText) {
     }
 
     const trimmed = line.trim()
+
+    // Fenced blocks: ```json ... ```
+    if (trimmed.startsWith('```')) {
+      flushParagraph()
+      flushList()
+
+      const rawLang = trimmed.slice(3).trim()
+      const lang = normalizeFenceLang(rawLang)
+      const contentLines = []
+
+      // Consume until closing fence or end of text.
+      while (lineIndex + 1 < lines.length) {
+        const next = String(lines[lineIndex + 1] ?? '')
+        if (next.trim().startsWith('```')) {
+          lineIndex++
+          break
+        }
+        contentLines.push(next)
+        lineIndex++
+      }
+
+      blocks.push({
+        type: 'fence',
+        rawLang,
+        lang,
+        content: contentLines.join('\n'),
+      })
+      continue
+    }
+
     const headingMatch = trimmed.match(/^(.+):\s*$/)
     const bulletMatch = trimmed.match(/^([*\-+])\s+(.*)$/)
 
@@ -140,6 +188,35 @@ export function renderFormattedText(rawText) {
   flushList()
 
   return blocks.map((block, idx) => {
+    if (block.type === 'fence') {
+      const langLabel = String(block.lang || block.rawLang || 'json').trim() || 'json'
+      const normalized = String(block.lang || '').trim()
+      const isPlaintext = normalized === 'plaintext' || normalized === 'text' || normalized === 'plain'
+      const isJson = normalized === 'json'
+      const displayText = isJson ? tryPrettyJsonText(block.content) : String(block.content ?? '')
+
+      return (
+        <div
+          key={`f-${idx}`}
+          className="relative my-2 border-4 border-black bg-white p-3 shadow-brutal-sm"
+        >
+          <div className="absolute right-2 top-2 select-none border-2 border-black bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-black">
+            {langLabel}
+          </div>
+
+          {isPlaintext ? (
+            <div className="brutal-scroll max-h-72 overflow-auto whitespace-pre-wrap border-4 border-black bg-yellow-100 p-3 font-mono text-[11px] leading-5 text-black">
+              {displayText || '(empty)'}
+            </div>
+          ) : (
+            <pre className="brutal-scroll max-h-72 overflow-auto whitespace-pre-wrap border-4 border-black bg-yellow-100 p-3 text-[11px] leading-5 text-black">
+              <code className="font-mono">{displayText || '(empty)'}</code>
+            </pre>
+          )}
+        </div>
+      )
+    }
+
     if (block.type === 'h') {
       return (
         <div key={`h-${idx}`} className="mb-2 mt-2 inline-block border-b-4 border-black bg-yellow-200 px-2 py-1 font-black uppercase tracking-widest">
