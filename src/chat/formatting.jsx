@@ -1,71 +1,135 @@
+function safeHref(rawHref) {
+  const href = String(rawHref ?? '').trim()
+  if (!href) return null
+
+  const lower = href.toLowerCase()
+  if (lower.startsWith('http://') || lower.startsWith('https://')) return href
+  if (lower.startsWith('mailto:')) return href
+  if (href.startsWith('/') || href.startsWith('#')) return href
+
+  return null
+}
+
+/* --------------------------- Inline rendering --------------------------- */
+
+// Finds the *next* token start the same way your old code did (earliest of **, `, [)
+const INLINE_START_RE = /(\*\*)|(`)|(\[)/g
+
 function renderInline(text) {
   if (!text) return ''
 
   const nodes = []
+  const s = String(text)
   let i = 0
-  while (i < text.length) {
-    const boldIndex = text.indexOf('**', i)
-    const codeIndex = text.indexOf('`', i)
-    let nextIndex = -1
-    let token = null
 
-    if (boldIndex !== -1 && (codeIndex === -1 || boldIndex < codeIndex)) {
-      nextIndex = boldIndex
-      token = 'bold'
-    } else if (codeIndex !== -1) {
-      nextIndex = codeIndex
-      token = 'code'
-    }
+  const pushText = (from, to) => {
+    if (to > from) nodes.push(s.slice(from, to))
+  }
 
-    if (nextIndex === -1) {
-      nodes.push(text.slice(i))
+  while (i < s.length) {
+    INLINE_START_RE.lastIndex = i
+    const m = INLINE_START_RE.exec(s)
+
+    if (!m) {
+      pushText(i, s.length)
       break
     }
 
-    if (nextIndex > i) nodes.push(text.slice(i, nextIndex))
+    const start = m.index
+    pushText(i, start)
 
-    if (token === 'bold') {
-      const end = text.indexOf('**', nextIndex + 2)
+    // **bold**
+    if (m[1]) {
+      const end = s.indexOf('**', start + 2)
       if (end === -1) {
-        nodes.push(text.slice(nextIndex))
+        nodes.push(s.slice(start))
         break
       }
-      const content = text.slice(nextIndex + 2, end)
-      nodes.push(<strong key={`b-${nextIndex}`}>{content}</strong>)
+      nodes.push(<strong key={`b-${start}`}>{s.slice(start + 2, end)}</strong>)
       i = end + 2
       continue
     }
 
-    if (token === 'code') {
-      const end = text.indexOf('`', nextIndex + 1)
+    // `code`
+    if (m[2]) {
+      const end = s.indexOf('`', start + 1)
       if (end === -1) {
-        nodes.push(text.slice(nextIndex))
+        nodes.push(s.slice(start))
         break
       }
-      const content = text.slice(nextIndex + 1, end)
       nodes.push(
         <code
-          key={`c-${nextIndex}`}
+          key={`c-${start}`}
           className="border-2 border-black bg-yellow-200 px-1 py-0.5 font-mono text-[0.95em] font-semibold"
         >
-          {content}
+          {s.slice(start + 1, end)}
         </code>,
       )
       i = end + 1
       continue
     }
 
-    nodes.push(text.slice(nextIndex))
+    // [label] (href) with optional spaces between ] and (
+    if (m[3]) {
+      const closeBracket = s.indexOf(']', start + 1)
+      if (closeBracket === -1) {
+        nodes.push(s.slice(start))
+        break
+      }
+
+      let after = closeBracket + 1
+      while (after < s.length && s[after] === ' ') after++
+
+      if (s[after] !== '(') {
+        nodes.push('[')
+        i = start + 1
+        continue
+      }
+
+      const closeParen = s.indexOf(')', after + 1)
+      if (closeParen === -1) {
+        nodes.push(s.slice(start))
+        break
+      }
+
+      const label = s.slice(start + 1, closeBracket)
+      const hrefRaw = s.slice(after + 1, closeParen)
+      const href = safeHref(hrefRaw)
+
+      if (!href) {
+        nodes.push(s.slice(start, closeParen + 1))
+        i = closeParen + 1
+        continue
+      }
+
+      const isInternal = href.startsWith('#') || href.startsWith('/')
+      nodes.push(
+        <a
+          key={`a-${start}`}
+          href={href}
+          target={isInternal ? undefined : '_blank'}
+          rel={isInternal ? undefined : 'noreferrer noopener'}
+          className="font-semibold underline underline-offset-2"
+        >
+          {label || href}
+        </a>,
+      )
+      i = closeParen + 1
+      continue
+    }
+
+    nodes.push(s.slice(start))
     break
   }
 
   return nodes
 }
 
+/* --------------------------- Fence helpers --------------------------- */
+
 function normalizeFenceLang(rawLang) {
   const s = String(rawLang ?? '').trim()
   if (!s) return ''
-  // Accept things like "json|plaintext|whatever" (docs/examples) by taking the first segment.
   return s.split('|')[0].trim().toLowerCase()
 }
 
@@ -79,6 +143,15 @@ function tryPrettyJsonText(text) {
   }
 }
 
+/* --------------------------- Block parsing --------------------------- */
+
+const RX = {
+  fence: /^```(.*)$/,
+  heading: /^(.+):\s*$/,
+  bullet: /^([*\-+])\s+(.*)$/,
+  ordered: /^(\d+)\.\s+(.*)$/,
+}
+
 export function renderFormattedText(rawText) {
   const text = (rawText ?? '').replace(/\r\n/g, '\n')
   if (!text) return ''
@@ -87,7 +160,7 @@ export function renderFormattedText(rawText) {
   const blocks = []
 
   let paragraphLines = []
-  let listItems = null
+  let listBlock = null
 
   const flushParagraph = () => {
     if (!paragraphLines.length) return
@@ -97,18 +170,41 @@ export function renderFormattedText(rawText) {
   }
 
   const flushList = () => {
-    if (!listItems || !listItems.length) {
-      listItems = null
+    if (!listBlock?.items?.length) {
+      listBlock = null
       return
     }
-    blocks.push({ type: 'list', items: listItems })
-    listItems = null
+    blocks.push({ type: 'list', kind: listBlock.kind, items: listBlock.items })
+    listBlock = null
   }
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const originalLine = lines[lineIndex]
-    const line = originalLine.replace(/\s+$/, '')
+  const ensureList = (kind) => {
+    if (!listBlock || listBlock.kind !== kind) {
+      flushList()
+      listBlock = { kind, items: [] }
+    }
+  }
 
+  const pushUl = (marker, content) => {
+    ensureList('ul')
+    if (marker === '+' && listBlock.items.length > 0) {
+      const last = listBlock.items[listBlock.items.length - 1]
+      ;(last.children ??= []).push(content)
+    } else {
+      listBlock.items.push({ text: content })
+    }
+  }
+
+  const pushOl = (content) => {
+    ensureList('ol')
+    listBlock.items.push({ text: content })
+  }
+
+  const isHeading = (trimmed, match) =>
+    !!match && trimmed.length <= 64 && !trimmed.startsWith('http') && !trimmed.includes('.')
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = String(lines[lineIndex] ?? '').replace(/\s+$/, '')
     if (!line.trim()) {
       flushParagraph()
       flushList()
@@ -118,18 +214,18 @@ export function renderFormattedText(rawText) {
     const trimmed = line.trim()
 
     // Fenced blocks: ```json ... ```
-    if (trimmed.startsWith('```')) {
+    const fence = trimmed.match(RX.fence)
+    if (fence) {
       flushParagraph()
       flushList()
 
-      const rawLang = trimmed.slice(3).trim()
+      const rawLang = (fence[1] ?? '').trim()
       const lang = normalizeFenceLang(rawLang)
       const contentLines = []
 
-      // Consume until closing fence or end of text.
       while (lineIndex + 1 < lines.length) {
         const next = String(lines[lineIndex + 1] ?? '')
-        if (next.trim().startsWith('```')) {
+        if (RX.fence.test(next.trim())) {
           lineIndex++
           break
         }
@@ -137,46 +233,29 @@ export function renderFormattedText(rawText) {
         lineIndex++
       }
 
-      blocks.push({
-        type: 'fence',
-        rawLang,
-        lang,
-        content: contentLines.join('\n'),
-      })
+      blocks.push({ type: 'fence', rawLang, lang, content: contentLines.join('\n') })
       continue
     }
 
-    const headingMatch = trimmed.match(/^(.+):\s*$/)
-    const bulletMatch = trimmed.match(/^([*\-+])\s+(.*)$/)
-
-    const isHeading =
-      !!headingMatch &&
-      trimmed.length <= 64 &&
-      !trimmed.startsWith('http') &&
-      !trimmed.includes('.')
-
-    if (isHeading) {
+    const headingMatch = trimmed.match(RX.heading)
+    if (isHeading(trimmed, headingMatch)) {
       flushParagraph()
       flushList()
       blocks.push({ type: 'h', text: headingMatch[1] })
       continue
     }
 
+    const bulletMatch = trimmed.match(RX.bullet)
     if (bulletMatch) {
       flushParagraph()
-      const marker = bulletMatch[1]
-      const content = bulletMatch[2]
+      pushUl(bulletMatch[1], bulletMatch[2])
+      continue
+    }
 
-      if (!listItems) listItems = []
-
-      if (marker === '+' && listItems.length > 0) {
-        const last = listItems[listItems.length - 1]
-        if (!last.children) last.children = []
-        last.children.push(content)
-      } else {
-        listItems.push({ text: content })
-      }
-
+    const orderedMatch = trimmed.match(RX.ordered)
+    if (orderedMatch) {
+      flushParagraph()
+      pushOl(orderedMatch[2])
       continue
     }
 
@@ -187,6 +266,8 @@ export function renderFormattedText(rawText) {
   flushParagraph()
   flushList()
 
+  const isInternalHref = (href) => href.startsWith('#') || href.startsWith('/')
+
   return blocks.map((block, idx) => {
     if (block.type === 'fence') {
       const langLabel = String(block.lang || block.rawLang || 'json').trim() || 'json'
@@ -196,10 +277,7 @@ export function renderFormattedText(rawText) {
       const displayText = isJson ? tryPrettyJsonText(block.content) : String(block.content ?? '')
 
       return (
-        <div
-          key={`f-${idx}`}
-          className="relative my-2 border-4 border-black bg-white p-3 shadow-brutal-sm"
-        >
+        <div key={`f-${idx}`} className="relative my-2 border-4 border-black bg-white p-3 shadow-brutal-sm">
           <div className="absolute right-2 top-2 select-none border-2 border-black bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-black">
             {langLabel}
           </div>
@@ -219,20 +297,26 @@ export function renderFormattedText(rawText) {
 
     if (block.type === 'h') {
       return (
-        <div key={`h-${idx}`} className="mb-2 mt-2 inline-block border-b-4 border-black bg-yellow-200 px-2 py-1 font-black uppercase tracking-widest">
+        <div
+          key={`h-${idx}`}
+          className="mb-2 mt-2 inline-block border-b-4 border-black bg-yellow-200 px-2 py-1 font-black uppercase tracking-widest"
+        >
           {renderInline(block.text)}
         </div>
       )
     }
 
     if (block.type === 'list') {
+      const ListTag = block.kind === 'ol' ? 'ol' : 'ul'
+      const listClass = block.kind === 'ol' ? 'my-2 list-decimal pl-6' : 'my-2 list-disc pl-6'
+
       return (
-        <ul key={`l-${idx}`}>
+        <ListTag key={`l-${idx}`} className={listClass}>
           {block.items.map((item, itemIndex) => (
             <li key={`li-${idx}-${itemIndex}`}>
               {renderInline(item.text)}
               {item.children?.length ? (
-                <ul>
+                <ul className="mt-1 list-disc pl-6">
                   {item.children.map((child, childIndex) => (
                     <li key={`li-${idx}-${itemIndex}-${childIndex}`}>
                       {renderInline(child)}
@@ -242,18 +326,18 @@ export function renderFormattedText(rawText) {
               ) : null}
             </li>
           ))}
-        </ul>
+        </ListTag>
       )
     }
 
     if (block.type === 'p') {
-      const paragraphParts = block.text.split('\n')
+      const parts = block.text.split('\n')
       return (
         <p key={`p-${idx}`}>
-          {paragraphParts.map((part, partIndex) => (
+          {parts.map((part, partIndex) => (
             <span key={`ps-${idx}-${partIndex}`}>
               {renderInline(part)}
-              {partIndex < paragraphParts.length - 1 ? <br /> : null}
+              {partIndex < parts.length - 1 ? <br /> : null}
             </span>
           ))}
         </p>
