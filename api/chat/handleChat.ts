@@ -43,7 +43,9 @@ function isEnvTrue(value: unknown): boolean {
 function looksDocRelated(text: string): boolean {
   const t = String(text || "").toLowerCase();
   if (!t.trim()) { return false; }
-  const signals = [
+
+  // Retrieval is required when the user is explicitly asking about uploaded files/docs.
+  const docSignals = [
     "pdf",
     "document",
     "doc",
@@ -54,16 +56,67 @@ function looksDocRelated(text: string): boolean {
     "uploaded",
     "upload",
     "file",
+    "attachment",
     "what does it say",
     "what does the file say",
     "according to",
     "in the attachment",
   ];
-  return signals.some((s) => t.includes(s));
+  if (docSignals.some((s) => t.includes(s))) { return true; }
+
+  // Retrieval is also required for verbatim / exact quote requests (including verse text requests).
+  const quoteSignals = [
+    "verbatim",
+    "exact wording",
+    "exact words",
+    "exact verse",
+    "exact verses",
+    "direct quote",
+    "quote",
+    "quoted",
+    "word for word",
+    "what does it say",
+    "what does",
+    "says",
+    "say?",
+    "text of",
+  ];
+
+  // Bible reference pattern like "John 3:16" or "1 Corinthians 13:4-7".
+  const bibleRef = /\b(?:[1-3]\s*)?[a-z][a-z]+(?:\s+[a-z][a-z]+)*\s+\d{1,3}:\d{1,3}(?:-\d{1,3})?\b/i;
+  const hasRef = bibleRef.test(text);
+  if (hasRef && quoteSignals.some((s) => t.includes(s))) { return true; }
+
+  return false;
 }
 
 function hasCitationMarkers(text: string): boolean {
   return /\[source:/i.test(String(text || ""));
+}
+
+function isVerbatimRequest(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  if (!t.trim()) { return false; }
+  const signals = [
+    "verbatim",
+    "exact verse",
+    "exact verses",
+    "exact wording",
+    "exact words",
+    "direct quote",
+    "quote",
+    "quoted",
+    "word for word",
+    "text of",
+  ];
+  if (signals.some((s) => t.includes(s))) { return true; }
+
+  // If the user asks what a specific verse "says", treat as verbatim.
+  const bibleRef = /\b(?:[1-3]\s*)?[a-z][a-z]+(?:\s+[a-z][a-z]+)*\s+\d{1,3}:\d{1,3}(?:-\d{1,3})?\b/i;
+  const asksSays = /\bwhat\s+does\b.*\bsay\b|\bwhat\s+does\b.*\bsays\b|\bwhat\s+does\s+.*\bsay\?\b/i.test(String(text || ""));
+  if (bibleRef.test(String(text || "")) && asksSays) { return true; }
+
+  return false;
 }
 
 function extractLikelyUploadId(text: string): string | undefined {
@@ -292,9 +345,9 @@ export function createHandleChat({
         let citationOk = false;
 
         if (insufficientFinal) {
-          answerText =
-            "I can’t find this in your uploaded files (after searching twice). " +
-            "If you tell me which file to use or upload the relevant document, I can try again.";
+          answerText = isVerbatimRequest(lastUserText)
+            ? "I cannot find this exact passage in the uploaded files."
+            : "I cannot provide this information because it is not present verbatim in the uploaded documents.";
           citationOk = true;
         } else {
           const allowlist: AllowedChunkRef[] = resultsFinal.map((r: any) => ({
