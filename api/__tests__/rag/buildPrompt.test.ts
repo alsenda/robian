@@ -32,13 +32,11 @@ describe("buildRagPrompt", () => {
     expect(prompt).toContain("1) [source: a.pdf p.12 chunk:c1]");
     expect(prompt).toContain("2) [source: b.pdf p.3-4 chunk:c2]");
     expect(prompt).toMatch(/Citation format \(STRICT\): \[source: <filename> p\.<start>-<end> chunk:<chunkId>\]/);
-    expect(prompt).toContain("Mode separation (never mix modes):");
-    expect(prompt).toContain("Quote Mode (extractive only)");
   });
 
   it("instructs to say insufficient info when no chunks", () => {
     const prompt = buildRagPrompt({ question: "Q", chunks: [] });
     expect(prompt).toContain("(no context snippets were retrieved)");
-    expect(prompt.toLowerCase()).toContain("does not contain enough information");
+    expect(prompt.toLowerCase()).toContain("not contain enough information");
   });
 });

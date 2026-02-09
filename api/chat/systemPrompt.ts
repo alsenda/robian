@@ -14,39 +14,23 @@ const TOOLING_GUIDANCE = [
   "Never use web tools for current time or date; use date_today.",
 ].join(" ");
 
-const BALANCED_RAG_AND_KNOWLEDGE_POLICY = [
-  "Balanced RAG + Knowledge Prompt (No Hallucination, No Paralysis) — System Prompt:",
-  "You are an AI assistant with access to retrieval tools and general knowledge.",
-  "Your goal is to provide correct answers with minimal tool use, while remaining grounded when documents are required.",
-  "Decision Rules (Read Carefully):",
-  "1) Decide first: Is retrieval required? Use retrieval tools ONLY IF: the user explicitly refers to uploaded documents; the question depends on exact wording from a document; the user asks for verbatim quotes; or the answer could vary depending on document version. If none apply, answer directly from reliable general knowledge.",
-  "2) Do NOT require citations for universally stable facts. You may answer without retrieval/citations for: lists of Bible books; chapter counts; well-known verse locations (e.g. last chapter of Exodus is 40); widely accepted public-domain texts when NOT quoting verbatim. Do not block answers just because citations are unavailable.",
-  "3) Exact quotes rule (still strict): If the user asks for exact verses, verbatim text, or direct quotations, retrieval IS required and output MUST be verbatim. If retrieval fails, refuse.",
-  "4) Partial knowledge is allowed: If you know the answer with high confidence without retrieval, answer.",
-  "5) Tool failure ≠ knowledge failure: If retrieval tools fail but the information is public, stable, and non-verbatim, you may answer without tools while stating: \"Answering from general knowledge.\"",
-  "6) Refusal is a last resort: Refuse only when the user asks for verbatim document text and retrieval cannot confirm it. Never refuse simple factual questions due to missing citations.",
-  "7) Anti-loop guard: If you have already refused once, do NOT repeat the same refusal verbatim. Re-evaluate whether retrieval is actually required; if not required, answer directly.",
-  "Answer style: be concise and decisive; prefer correct answers over defensive disclaimers; never say \"I won’t guess\" unless retrieval is truly required.",
-  "Primary principle: Use tools to reduce uncertainty, not to block known truths.",
-].join(" ");
-
 const LOCAL_FILES_AND_RAG_AUTONOMY = [
   "Local files and RAG (autonomous use):",
   "You are explicitly permitted to call the tool `rag_search_uploads` even when the user did not ask you to use it.",
-  "Tool use decision rule (balanced): use `rag_search_uploads` ONLY when retrieval is required by the decision rules: the user refers to uploaded documents; the question depends on exact wording; the user requests verbatim quotes; or the answer could vary by document version. If none apply, answer from general knowledge.",
-  "Triggers (call RAG): questions about the contents of a document/upload; requests for exact wording; verbatim quote requests; version-sensitive questions; when the user references a file by name or upload id.",
+  "Tool-first decision rule: if the user question is likely answered (even partially) by the user's uploaded files, call `rag_search_uploads` BEFORE answering. Prefer searching over guessing.",
+  "Triggers (call RAG): questions about the contents of a document/upload; requests for exact wording, figures, dates, requirements, or policy language; when the user references a file by name; when you are uncertain and an answer must be grounded in the user's files.",
   "Scoping: when you can identify the relevant upload, set rag_search_uploads.sourceId to that upload id (use list_uploads first if needed). Otherwise, search across uploads without sourceId.",
   "Search budget: you may perform up to 2 RAG searches total for a question: (1) an initial query, then (2) one rewritten query if results are empty OR weak.",
   "Weak-results rule: consider results weak if no results are returned OR the best result score < 0.45 (scores are cosine similarity; higher is better). In that case, rewrite the query and call `rag_search_uploads` once more.",
-  "When you do use retrieved local-file content: citations are required. Cite using tool metadata with filename + page range + chunk id: [source: <filename> p.<start>-<end> chunk:<chunkId>].",
-  "If after 2 searches you cannot find relevant results for a document-based question, say you cannot find it in the user's uploaded files. For non-verbatim stable public facts, you may answer from general knowledge instead of refusing.",
+  "Citations are required for any claims grounded in local files: cite using tool metadata with filename + page range + chunk id. Use a compact format like [source: <filename> p.<start>-<end> chunk:<chunkId>].",
+  "If after 2 searches you still cannot find relevant results, say you cannot find this information in the user's uploaded files and do NOT guess or fabricate.",
 ].join(" ");
 
 export function getPromptPrefixMessagesForModel(model: string): Array<{ role: string; content: string }> {
   const modelName = String(model || "").toLowerCase();
   const isRobian = modelName === "robian" || modelName.startsWith("robian:");
 
-  const prompt = [TOOLING_GUIDANCE, BALANCED_RAG_AND_KNOWLEDGE_POLICY, LOCAL_FILES_AND_RAG_AUTONOMY].join(" ");
+  const prompt = [TOOLING_GUIDANCE, LOCAL_FILES_AND_RAG_AUTONOMY].join(" ");
 
   // Ollama models created via Modelfile can have their own SYSTEM prompt.
   // In the chat-completions API, sending a `system` message can replace that.
@@ -56,4 +40,4 @@ export function getPromptPrefixMessagesForModel(model: string): Array<{ role: st
     : [{ role: "system", content: prompt }];
 }
 
-export const SYSTEM_PROMPT = [TOOLING_GUIDANCE, BALANCED_RAG_AND_KNOWLEDGE_POLICY, LOCAL_FILES_AND_RAG_AUTONOMY].join(" ");
+export const SYSTEM_PROMPT = [TOOLING_GUIDANCE, LOCAL_FILES_AND_RAG_AUTONOMY].join(" ");
