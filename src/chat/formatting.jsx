@@ -299,7 +299,7 @@ export function renderFormattedText(rawText) {
       return (
         <div
           key={`h-${idx}`}
-          className="mb-2 mt-2 inline-block border-b-4 border-black bg-yellow-200 px-2 py-1 font-black uppercase tracking-widest"
+          className="mb-2 mt-2 inline-block border-b-4 border-black pt-2 py-1 tracking-widest"
         >
           {renderInline(block.text)}
         </div>
