@@ -27,7 +27,12 @@ function formatPageRange(pageStart?: number | null, pageEnd?: number | null): st
 function sourceTag(chunk: Pick<RetrievedChunk, "filename" | "pageStart" | "pageEnd">): string {
   const filename = oneLine(chunk.filename);
   const pages = formatPageRange(chunk.pageStart, chunk.pageEnd);
-  return `[source: ${filename}${pages}]`;
+  const chunkId = (chunk as any)?.chunkId ? oneLine(String((chunk as any).chunkId)) : "";
+  // Keep the citation format strict and machine-parseable.
+  // Example: [source: contract.pdf p.12-13 chunk:abc123]
+  return chunkId
+    ? `[source: ${filename}${pages} chunk:${chunkId}]`
+    : `[source: ${filename}${pages}]`;
 }
 
 export function buildRagPrompt(input: { question: string; chunks: RetrievedChunk[] }): string {
@@ -47,8 +52,11 @@ export function buildRagPrompt(input: { question: string; chunks: RetrievedChunk
     `You are a helpful assistant. Answer ONLY using the provided context.\n` +
     `Do not use outside knowledge. Do not guess.\n` +
     `\n` +
-    `Citations: Every sentence that states a fact must include an inline citation like [source: filename p.12].\n` +
-    `If a page range is available, cite it like [source: filename p.12-13].\n` +
+    `Citations are required for grounded answers.\n` +
+    `Citation format (STRICT): [source: <filename> p.<start>-<end> chunk:<chunkId>]\n` +
+    `- Use ONLY chunk ids that appear in the provided context.\n` +
+    `- Every sentence that states a fact from the context must include at least one citation.\n` +
+    `- Do not invent filenames, page ranges, or chunk ids.\n` +
     `\n` +
     `If the context does not contain enough information to answer, say you don't have enough information in the provided documents, ` +
     `and ask what document to upload or what to search.\n` +

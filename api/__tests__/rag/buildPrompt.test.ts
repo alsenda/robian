@@ -29,9 +29,9 @@ describe("buildRagPrompt", () => {
     });
 
     expect(prompt).toContain("Context:");
-    expect(prompt).toContain("1) [source: a.pdf p.12]");
-    expect(prompt).toContain("2) [source: b.pdf p.3-4]");
-    expect(prompt).toMatch(/Citations: Every sentence.*\[source: filename p\.12\]/);
+    expect(prompt).toContain("1) [source: a.pdf p.12 chunk:c1]");
+    expect(prompt).toContain("2) [source: b.pdf p.3-4 chunk:c2]");
+    expect(prompt).toMatch(/Citation format \(STRICT\): \[source: <filename> p\.<start>-<end> chunk:<chunkId>\]/);
   });
 
   it("instructs to say insufficient info when no chunks", () => {

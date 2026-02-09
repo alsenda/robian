@@ -21,6 +21,12 @@ import {
 import { streamOllamaChatCompletionsOnce } from "./ollama/client.ts";
 import { streamChatWithTools } from "./streamChat.ts";
 import type { RagService } from "../rag/types.ts";
+import {
+  validateCitationsAgainstAllowlist,
+  type AllowedChunkRef,
+} from "./utils/citations.ts";
+import { buildRagPrompt } from "../../src/server/rag/prompt/buildPrompt.ts";
+import { chat as ollamaGenerate } from "../../src/server/rag/llm/ollamaChat.ts";
 
 const DEFAULT_OLLAMA_URL = "http://localhost:11434";
 const DEFAULT_OLLAMA_MODEL = "robian:latest";
@@ -74,6 +80,83 @@ function extractLikelyUploadId(text: string): string | undefined {
   return undefined;
 }
 
+function parseEnvNumber(value: unknown, fallback: number): number {
+  const raw = typeof value === "string" ? value.trim() : value;
+  const n = typeof raw === "number" ? raw : raw != null ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) { return fallback; }
+  return n;
+}
+
+function isUuidLike(value: string | undefined): boolean {
+  if (!value) { return false; }
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function deterministicRewriteQuery(text: string): string {
+  const input = String(text ?? "").trim();
+  if (!input) { return ""; }
+
+  const quoted: string[] = [];
+  for (const m of input.matchAll(/"([^"]{2,})"|'([^']{2,})'/g)) {
+    const q = String(m[1] || m[2] || "").trim();
+    if (q) { quoted.push(q); }
+  }
+
+  const fileMatch = input.match(/\b[\w.-]+\.(?:pdf|txt|md|docx|pptx|html)\b/gi);
+  const filenames = fileMatch ? Array.from(new Set(fileMatch.map((f) => f.trim()))).slice(0, 2) : [];
+
+  const cleaned = input
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, " ")
+    .replace(/[^\p{L}\p{N}.\-\s]+/gu, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const stop = new Set([
+    "please",
+    "can",
+    "could",
+    "would",
+    "tell",
+    "me",
+    "about",
+    "what",
+    "whats",
+    "is",
+    "are",
+    "the",
+    "a",
+    "an",
+    "in",
+    "on",
+    "from",
+    "for",
+    "of",
+    "and",
+    "to",
+    "according",
+    "upload",
+    "uploaded",
+    "file",
+    "document",
+    "pdf",
+  ]);
+
+  const terms: string[] = [];
+  for (const part of cleaned.split(/\s+/g)) {
+    const t = part.trim();
+    if (t.length < 3) { continue; }
+    const lower = t.toLowerCase();
+    if (stop.has(lower)) { continue; }
+    if (terms.includes(t)) { continue; }
+    terms.push(t);
+    if (terms.length >= 10) { break; }
+  }
+
+  const pieces = [...quoted.map((q) => `"${q}"`), ...filenames, ...terms].filter(Boolean);
+  const rewritten = pieces.join(" ").trim();
+  return rewritten || input;
+}
+
 async function collectChunks(stream: AsyncGenerator<unknown, void, void>): Promise<{ chunks: unknown[]; content: string }> {
   const chunks: unknown[] = [];
   let content = "";
@@ -122,6 +205,14 @@ export function createHandleChat({
       const modelMessages = convertMessagesToModelMessages(messages as any);
       const chatCompletionsMessages = toChatCompletionsMessages(modelMessages);
 
+      const lastUserText = (() => {
+        for (let i = chatCompletionsMessages.length - 1; i >= 0; i--) {
+          const m = chatCompletionsMessages[i] as any;
+          if (m && m.role === "user" && typeof m.content === "string") { return m.content; }
+        }
+        return "";
+      })();
+
       const tools = toChatCompletionsTools([
         searchWebDef,
         fetchUrlDef,
@@ -133,6 +224,230 @@ export function createHandleChat({
 
       const prefixMessages = getPromptPrefixMessagesForModel(model);
       const firstConversation = [...prefixMessages, ...chatCompletionsMessages];
+
+      const docRelated = looksDocRelated(lastUserText);
+      const ragMinScore = parseEnvNumber(process.env.RAG_MIN_SCORE, 0.45);
+      const ragTopK = Math.max(1, Math.min(50, Math.floor(parseEnvNumber(process.env.RAG_DOC_TOPK, 8))));
+
+      // Doc-related path: enforce retrieve-before-answer and validate citations server-side.
+      if (docRelated) {
+        const listTool = serverTools.find((t) => t.name === "list_uploads");
+
+        let sourceId: string | undefined = extractLikelyUploadId(lastUserText);
+        if (!isUuidLike(sourceId)) { sourceId = undefined; }
+
+        if (!sourceId && listTool) {
+          try {
+            const out = (await listTool.execute({ limit: 50 })) as any;
+            const uploads = Array.isArray(out?.uploads) ? out.uploads : [];
+            if (uploads.length === 1 && typeof uploads[0]?.id === "string" && uploads[0].id) {
+              sourceId = uploads[0].id;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        const retrievalAttempts: Array<{ args: any; result: any }> = [];
+
+        const runRetrieval = async (query: string) => {
+          const args: any = { query, topK: ragTopK, ...(sourceId ? { sourceId } : {}) };
+          const result = await ragService.query(query, ragTopK, {
+            source: "upload",
+            ...(sourceId ? { sourceId } : {}),
+          });
+          retrievalAttempts.push({ args, result });
+          return result;
+        };
+
+        const q1 = String(lastUserText || "").trim();
+        const out1 = await runRetrieval(q1);
+
+        const bestScore1 = out1?.results?.[0]?.score ?? 0;
+        const insufficient1 =
+          !out1?.ok ||
+          !Array.isArray(out1.results) ||
+          out1.results.length === 0 ||
+          out1.weak === true ||
+          (typeof bestScore1 === "number" && bestScore1 < ragMinScore);
+
+        let outFinal = out1;
+        if (insufficient1) {
+          const rewritten = deterministicRewriteQuery(q1);
+          if (rewritten && rewritten !== q1) {
+            outFinal = await runRetrieval(rewritten);
+          }
+        }
+
+        const resultsFinal = Array.isArray(outFinal?.results) ? outFinal.results : [];
+        const bestScoreFinal = resultsFinal[0]?.score ?? 0;
+        const insufficientFinal =
+          !outFinal?.ok ||
+          resultsFinal.length === 0 ||
+          outFinal.weak === true ||
+          (typeof bestScoreFinal === "number" && bestScoreFinal < ragMinScore);
+
+        // If we can't find evidence after 2 retrieval attempts max, refuse to guess.
+        let answerText = "";
+        let citationOk = false;
+
+        if (insufficientFinal) {
+          answerText =
+            "I can’t find this in your uploaded files (after searching twice). " +
+            "If you tell me which file to use or upload the relevant document, I can try again.";
+          citationOk = true;
+        } else {
+          const allowlist: AllowedChunkRef[] = resultsFinal.map((r: any) => ({
+            chunkId: String(r.chunkId || r.id || ""),
+            filename: String(r.filename || ""),
+            pageStart: r.pageStart,
+            pageEnd: r.pageEnd,
+          }));
+
+          const ragChunks = resultsFinal.map((r: any) => ({
+            chunkId: String(r.chunkId || r.id || ""),
+            documentId: String(r.documentId || r.sourceId || ""),
+            filename: String(r.filename || ""),
+            pageStart: r.pageStart,
+            pageEnd: r.pageEnd,
+            content: String(r.excerpt || ""),
+            score: typeof r.score === "number" ? r.score : 0,
+          }));
+
+          const prompt = buildRagPrompt({ question: q1, chunks: ragChunks as any });
+
+          const generateOnce = async (extraInstruction?: string) => {
+            const prompt2 = extraInstruction ? `${prompt}\n\n${extraInstruction}\n` : prompt;
+            return await ollamaGenerate(prompt2, { baseUrl: ollamaUrl, model, timeoutMs: 45_000 });
+          };
+
+          const first = await generateOnce();
+          const v1 = validateCitationsAgainstAllowlist({
+            text: first,
+            allowedChunks: allowlist,
+            requireChunkIds: true,
+          });
+
+          if (v1.ok) {
+            answerText = first;
+            citationOk = true;
+          } else {
+            const retry = await generateOnce(
+              "Your previous answer had unverifiable or missing citations. Re-answer using ONLY citations of the form " +
+                "[source: <filename> p.<start>-<end> chunk:<chunkId>] and ONLY chunk ids present in the context. " +
+                "If you cannot answer from the context, say you can't find it in the uploaded files.",
+            );
+
+            const v2 = validateCitationsAgainstAllowlist({
+              text: retry,
+              allowedChunks: allowlist,
+              requireChunkIds: true,
+            });
+
+            if (v2.ok) {
+              answerText = retry;
+              citationOk = true;
+            } else {
+              answerText =
+                "I generated an answer, but I can’t verify that its citations match the retrieved document chunks. " +
+                "I won’t guess here. Please specify which file to use (or upload the document) and I’ll try again.";
+              citationOk = true;
+            }
+          }
+        }
+
+        if (process.env.NODE_ENV !== "test") {
+          const attempts = retrievalAttempts.length;
+          const weak = Boolean(outFinal?.weak);
+          const bestScore = typeof bestScoreFinal === "number" ? bestScoreFinal : 0;
+          console.log(
+            `[chat][rag] doc=true attempts=${attempts} weak=${weak} bestScore=${bestScore.toFixed(3)} minScore=${ragMinScore} citations=${citationOk}`,
+          );
+        }
+
+        // Now that we have a final answer, open SSE and emit tool-call-ish events to preserve UX.
+        res.status(200);
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache, no-transform");
+        res.setHeader("Connection", "keep-alive");
+        ;(res as unknown as { flushHeaders?: () => void }).flushHeaders?.();
+
+        res.write(": connected\n\n");
+
+        const toolName = "rag_search_uploads";
+        const stream = (async function* (): AsyncGenerator<unknown, void, void> {
+          for (let i = 0; i < retrievalAttempts.length; i++) {
+            const toolCallId = randomUUID();
+            yield {
+              type: "tool_call",
+              id: requestId,
+              model,
+              timestamp: Date.now(),
+              index: i,
+              toolCall: {
+                id: toolCallId,
+                type: "function",
+                function: { name: toolName, arguments: JSON.stringify(retrievalAttempts[i]!.args) },
+              },
+            };
+
+            const content =
+              typeof retrievalAttempts[i]!.result === "string"
+                ? retrievalAttempts[i]!.result
+                : JSON.stringify(retrievalAttempts[i]!.result);
+
+            yield {
+              type: "tool_result",
+              id: requestId,
+              model,
+              timestamp: Date.now(),
+              toolCallId,
+              content,
+            };
+          }
+
+          yield {
+            type: "content",
+            id: requestId,
+            model,
+            timestamp: Date.now(),
+            delta: answerText,
+            content: answerText,
+            role: "assistant",
+          };
+
+          yield {
+            type: "done",
+            id: requestId,
+            model,
+            timestamp: Date.now(),
+            finishReason: "stop",
+          };
+        })();
+
+        const sseStream = toServerSentEventsStream(stream as unknown as any, abortController);
+        const nodeStream = Readable.fromWeb(sseStream as unknown as any);
+
+        nodeStream.on("error", (error: unknown) => {
+          if (abortController.signal.aborted) { return; }
+          console.error("SSE stream error:", error);
+          try {
+            res.end();
+          } catch {
+            // ignore
+          }
+        });
+
+        res.on("error", (error: unknown) => {
+          if (abortController.signal.aborted) { return; }
+          console.error("Response error:", error);
+          abortController.abort();
+          ;(nodeStream as unknown as { destroy: (e: unknown) => void }).destroy(error);
+        });
+
+        ;(nodeStream as unknown as { pipe: (r: unknown) => void }).pipe(res);
+        return;
+      }
 
       let firstResponse: Response | null | undefined;
       try {
@@ -176,14 +491,6 @@ export function createHandleChat({
       res.write(": connected\n\n");
 
       const autoNudgeEnabled = isEnvTrue(process.env.RAG_AUTONUDGE);
-
-      const lastUserText = (() => {
-        for (let i = chatCompletionsMessages.length - 1; i >= 0; i--) {
-          const m = chatCompletionsMessages[i] as any;
-          if (m && m.role === "user" && typeof m.content === "string") { return m.content; }
-        }
-        return "";
-      })();
 
       let stream: AsyncGenerator<unknown, void, void>;
 

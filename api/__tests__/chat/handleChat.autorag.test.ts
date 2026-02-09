@@ -136,6 +136,8 @@ describe("handleChat autonomous RAG (behavioral)", () => {
   });
 
   it("doc-related query triggers rag_search_uploads tool-call before answering", async () => {
+    process.env.RAG_DOC_TOPK = "5";
+
     const rag = {
       upsertDocuments: async () => ({ ok: true, upserted: 0 }),
       deleteDocuments: async () => ({ ok: true, deleted: 0 }),
@@ -161,57 +163,19 @@ describe("handleChat autonomous RAG (behavioral)", () => {
 
     const handleChat = createHandleChat({ ragService: rag as any });
 
-    let call = 0;
-    globalThis.fetch = vi.fn(async () => {
-      call++;
-      if (call === 1) {
-        return {
-          ok: true,
-          status: 200,
-          statusText: "OK",
-          body: createSseStream([
-            JSON.stringify({
-              model: "robian:latest",
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      {
-                        index: 0,
-                        id: "call-1",
-                        function: {
-                          name: "rag_search_uploads",
-                          arguments: JSON.stringify({ query: "payment terms", topK: 5, sourceId: uploadId }),
-                        },
-                      },
-                    ],
-                  },
-                  finish_reason: "tool_calls",
-                },
-              ],
-            }),
-          ]),
-        } as any;
+    globalThis.fetch = vi.fn(async (url: any) => {
+      const u = String(url || "");
+      if (!u.endsWith("/api/generate")) {
+        throw new Error(`Unexpected fetch url in doc-RAG path: ${u}`);
       }
 
       return {
         ok: true,
         status: 200,
         statusText: "OK",
-        body: createSseStream([
-          JSON.stringify({
-            model: "robian:latest",
-            choices: [
-              {
-                delta: {
-                  content:
-                    "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:u1:0]",
-                },
-                finish_reason: "stop",
-              },
-            ],
-          }),
-        ]),
+        json: async () => ({
+          response: "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:u1:0]",
+        }),
       } as any;
     }) as any;
 
@@ -226,7 +190,11 @@ describe("handleChat autonomous RAG (behavioral)", () => {
     expect(pipeSpy).toHaveBeenCalledTimes(1);
 
     expect(rag.query).toHaveBeenCalledTimes(1);
-    expect(rag.query).toHaveBeenCalledWith("payment terms", 5, { source: "upload", sourceId: uploadId });
+    expect(rag.query).toHaveBeenCalledWith(
+      `In upload ${uploadId}, what are the payment terms?`,
+      5,
+      { source: "upload", sourceId: uploadId },
+    );
 
     const events = parseCapturedChunks();
     const firstToolCallIndex = events.findIndex((e) => e?.type === "tool_call");
@@ -279,13 +247,13 @@ describe("handleChat autonomous RAG (behavioral)", () => {
   });
 });
 
-describe("handleChat RAG_AUTONUDGE", () => {
+describe("handleChat doc-RAG strictness (server enforced)", () => {
   const uploadId = "00000000-0000-4000-8000-000000000001";
   const originalEnv = process.env;
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    process.env = { ...originalEnv, RAG_AUTONUDGE: "true" };
+    process.env = { ...originalEnv, RAG_DOC_TOPK: "5" };
   });
 
   afterEach(() => {
@@ -293,13 +261,96 @@ describe("handleChat RAG_AUTONUDGE", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("nudges once when doc-related answer has no citations", async () => {
+  it("weak results trigger exactly one rewritten retrieval (2 searches max)", async () => {
+    const rag = {
+      upsertDocuments: async () => ({ ok: true, upserted: 0 }),
+      deleteDocuments: async () => ({ ok: true, deleted: 0 }),
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          query: "q1",
+          weak: true,
+          results: [
+            {
+              id: "u1:0",
+              chunkId: "u1:0",
+              documentId: uploadId,
+              filename: "contract.txt",
+              pageStart: 1,
+              pageEnd: 1,
+              score: 0.9,
+              source: "upload",
+              sourceId: uploadId,
+              excerpt: "Net 30.",
+              matchCount: 0,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          query: "q2",
+          weak: false,
+          results: [
+            {
+              id: "u1:0",
+              chunkId: "u1:0",
+              documentId: uploadId,
+              filename: "contract.txt",
+              pageStart: 1,
+              pageEnd: 1,
+              score: 0.9,
+              source: "upload",
+              sourceId: uploadId,
+              excerpt: "Net 30.",
+              matchCount: 2,
+            },
+          ],
+        }),
+    };
+
+    const handleChat = createHandleChat({ ragService: rag as any });
+
+    globalThis.fetch = vi.fn(async () => {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({
+          response: "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:u1:0]",
+        }),
+      } as any;
+    }) as any;
+
+    const { req, res } = createReqRes({
+      body: {
+        messages: [
+          {
+            role: "user",
+            content: `In upload ${uploadId}, please tell me what are the payment terms in the contract document`,
+          },
+        ],
+      },
+    });
+
+    await handleChat(req, res);
+    await consumeDone;
+
+    expect(res.statusCode).toBe(200);
+    expect(rag.query).toHaveBeenCalledTimes(2);
+    const firstQuery = (rag.query as any).mock.calls[0][0];
+    const secondQuery = (rag.query as any).mock.calls[1][0];
+    expect(String(firstQuery)).not.toEqual(String(secondQuery));
+  });
+
+  it("rejects fabricated chunk ids by retrying generation once", async () => {
     const rag = {
       upsertDocuments: async () => ({ ok: true, upserted: 0 }),
       deleteDocuments: async () => ({ ok: true, deleted: 0 }),
       query: vi.fn(async () => ({
         ok: true,
-        query: `In upload ${uploadId}, what are the payment terms?`,
+        query: "q",
+        weak: false,
         results: [
           {
             id: "u1:0",
@@ -312,6 +363,7 @@ describe("handleChat RAG_AUTONUDGE", () => {
             source: "upload",
             sourceId: uploadId,
             excerpt: "Net 30.",
+            matchCount: 2,
           },
         ],
       })),
@@ -319,48 +371,32 @@ describe("handleChat RAG_AUTONUDGE", () => {
 
     const handleChat = createHandleChat({ ragService: rag as any });
 
-    let call = 0;
-    globalThis.fetch = vi.fn(async () => {
-      call++;
-      if (call === 1) {
-        // First response: no tool calls, no citations.
+    let genCall = 0;
+    globalThis.fetch = vi.fn(async (url: any) => {
+      const u = String(url || "");
+      if (!u.endsWith("/api/generate")) {
+        throw new Error(`Unexpected fetch url: ${u}`);
+      }
+
+      genCall++;
+      if (genCall === 1) {
         return {
           ok: true,
           status: 200,
           statusText: "OK",
-          body: createSseStream([
-            JSON.stringify({
-              model: "robian:latest",
-              choices: [
-                {
-                  delta: { content: "The payment terms are Net 30." },
-                  finish_reason: "stop",
-                },
-              ],
-            }),
-          ]),
+          json: async () => ({
+            response: "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:FAKE]",
+          }),
         } as any;
       }
 
-      // Second response: includes citations after forced RAG tool injection.
       return {
         ok: true,
         status: 200,
         statusText: "OK",
-        body: createSseStream([
-          JSON.stringify({
-            model: "robian:latest",
-            choices: [
-              {
-                delta: {
-                  content:
-                    "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:u1:0]",
-                },
-                finish_reason: "stop",
-              },
-            ],
-          }),
-        ]),
+        json: async () => ({
+          response: "The payment terms are Net 30. [source: contract.txt p.1-1 chunk:u1:0]",
+        }),
       } as any;
     }) as any;
 
@@ -372,9 +408,11 @@ describe("handleChat RAG_AUTONUDGE", () => {
     await consumeDone;
 
     expect(res.statusCode).toBe(200);
-    expect(call).toBe(2);
-    expect(rag.query).toHaveBeenCalledTimes(1);
-    expect(rag.query).toHaveBeenCalledWith(expect.any(String), expect.any(Number), { source: "upload", sourceId: uploadId });
-    expect(capturedSse).toMatch(/\[source:/i);
+    expect(genCall).toBe(2);
+
+    const events = parseCapturedChunks();
+    const lastContent = [...events].reverse().find((e) => e?.type === "content")?.content;
+    expect(String(lastContent || "")).toContain("chunk:u1:0");
+    expect(String(lastContent || "")).not.toContain("chunk:FAKE");
   });
 });

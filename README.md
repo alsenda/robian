@@ -85,6 +85,18 @@ Notes:
 - `OLLAMA_BASE_URL` is used by the RAG embedding + ask pipeline.
 - `OLLAMA_URL` / `OLLAMA_MODEL` are still used by the existing `/api/chat` endpoint; you can point both base URLs to the same local Ollama instance.
 
+Grounded doc answers (chat):
+
+```
+# Minimum similarity score required to answer from retrieved chunks.
+# If retrieval is weak/low-score, the server retries once with a rewritten query;
+# if still weak, it refuses to guess.
+RAG_MIN_SCORE=0.45
+
+# How many chunks to retrieve for doc-related chat questions.
+RAG_DOC_TOPK=8
+```
+
 If RAG fails with an embeddings error, double-check you have the embeddings model installed:
 
 ```bash
