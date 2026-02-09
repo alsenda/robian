@@ -114,7 +114,6 @@ function isVerbatimRequest(text: string): boolean {
   // If the user asks what a specific verse "says", treat as verbatim.
   const bibleRef = /\b(?:[1-3]\s*)?[a-z][a-z]+(?:\s+[a-z][a-z]+)*\s+\d{1,3}:\d{1,3}(?:-\d{1,3})?\b/i;
   const asksSays = /\bwhat\s+does\b.*\bsay\b|\bwhat\s+does\b.*\bsays\b|\bwhat\s+does\s+.*\bsay\?\b/i.test(String(text || ""));
-
   if (bibleRef.test(String(text || "")) && asksSays) { return true; }
 
   return false;
@@ -418,7 +417,6 @@ export function createHandleChat({
             `[chat][rag] doc=true attempts=${attempts} weak=${weak} bestScore=${bestScore.toFixed(3)} minScore=${ragMinScore} citations=${citationOk}`,
           );
         }
-
 
         // Now that we have a final answer, open SSE and emit tool-call-ish events to preserve UX.
         res.status(200);
